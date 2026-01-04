@@ -6,7 +6,7 @@
 
 ## Status
 
-🚧 **In Development** - M2 Complete (Preview + Snapshot)
+✅ **M2 + M3 Complete** - Render Engine, Snapshot, MCP Server
 
 ## Documentation
 
@@ -133,15 +133,15 @@ ctx/
 - Pack CRUD operations
 - Basic source handlers (file, glob, text)
 
-### M2: Render + Snapshot ✅ (Weeks 3-4)
+### M2: Render + Snapshot ✅
 - Deterministic render engine
 - Token estimation
 - Redaction
 - Snapshot storage
 
-### M3: MCP Server 📋 (Weeks 5-6)
+### M3: MCP Server ✅
 - JSON-RPC 2.0 server
-- MCP tools
+- MCP tools (list, get, preview, snapshot)
 - Integration with render engine
 
 ### M4: Hardening 📋 (Weeks 7-8)
@@ -172,23 +172,9 @@ See [TECHNICAL_PLAN.md](./TECHNICAL_PLAN.md) for detailed implementation guide.
 
 ## Configuration
 
-Default config location: `~/.ctx/config.toml`
+🚧 Configuration system planned for M4.
 
-```toml
-budget_tokens = 24000
-
-[denylist]
-patterns = [
-  "**/.env*",
-  "**/.aws/**",
-  "**/secrets/**"
-]
-
-[mcp]
-host = "127.0.0.1"
-port = 17373
-read_only = true
-```
+Default settings: 128K token budget, MCP server on port 17373.
 
 ## Security
 

@@ -43,12 +43,3 @@ CREATE TABLE IF NOT EXISTS snapshots (
 
 CREATE INDEX IF NOT EXISTS idx_snapshots_render_hash ON snapshots(render_hash);
 CREATE INDEX IF NOT EXISTS idx_snapshots_created ON snapshots(created_at DESC);
-
-CREATE TABLE IF NOT EXISTS snapshot_items (
-    snapshot_id TEXT NOT NULL,
-    artifact_id TEXT NOT NULL,
-    content_hash TEXT NOT NULL,
-    render_meta_json TEXT NOT NULL,
-    PRIMARY KEY (snapshot_id, artifact_id),
-    FOREIGN KEY (snapshot_id) REFERENCES snapshots(snapshot_id) ON DELETE CASCADE
-);

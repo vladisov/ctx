@@ -96,10 +96,6 @@ pub enum PackCommands {
         /// Pack name or ID
         pack: String,
 
-        /// Additional packs to merge
-        #[arg(long = "with-pack")]
-        with_packs: Vec<String>,
-
         /// Show token counts
         #[arg(long)]
         tokens: bool,

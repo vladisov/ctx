@@ -29,11 +29,10 @@ pub async fn handle(cmd: PackCommands, storage: &Storage) -> Result<()> {
         PackCommands::Remove { pack, artifact_id } => remove(storage, pack, artifact_id).await,
         PackCommands::Preview {
             pack,
-            with_packs,
             tokens,
             redactions,
             show_payload,
-        } => preview(storage, pack, with_packs, tokens, redactions, show_payload).await,
+        } => preview(storage, pack, tokens, redactions, show_payload).await,
         PackCommands::Snapshot { pack, label } => snapshot(storage, pack, label).await,
     }
 }
@@ -169,14 +168,11 @@ async fn remove(storage: &Storage, pack_name: String, artifact_id: String) -> Re
 async fn preview(
     storage: &Storage,
     pack_name: String,
-    _with_packs: Vec<String>, // TODO: Support merging packs
     show_tokens: bool,
     show_redactions: bool,
     show_payload: bool,
 ) -> Result<()> {
-    let renderer = Renderer::new(storage.clone()); // Storage is Clone? If not we need to fix Renderer. Storage has SqlitePool which is Clone.
-
-    // Resolve pack ID
+    let renderer = Renderer::new(storage.clone());
     let pack = storage.get_pack(&pack_name).await?;
 
     println!("Previewing pack: {} ({})", pack.name, pack.id);
@@ -185,7 +181,7 @@ async fn preview(
 
     println!("render_hash: {}", result.render_hash);
     println!("token_estimate: {} / {}", result.token_estimate, result.budget_tokens);
-    
+
     if !result.excluded.is_empty() {
         println!("\nExcluded Artifacts ({}):", result.excluded.len());
         for excluded in &result.excluded {
@@ -220,13 +216,11 @@ async fn preview(
 
 async fn snapshot(storage: &Storage, pack_name: String, label: Option<String>) -> Result<()> {
     let renderer = Renderer::new(storage.clone());
-
     let pack = storage.get_pack(&pack_name).await?;
+
     println!("Creating snapshot for pack: {}...", pack.name);
 
     let result = renderer.render_pack(&pack.id, None).await?;
-    
-    // Create Snapshot struct
     let payload = result.payload.unwrap_or_default();
     let payload_hash = blake3::hash(payload.as_bytes()).to_hex().to_string();
 
@@ -236,31 +230,10 @@ async fn snapshot(storage: &Storage, pack_name: String, label: Option<String>) -
         label,
     );
 
-    // Save snapshot
     storage.create_snapshot(&snapshot).await?;
-
-    // Save snapshot items (M2 requirements say we should, but `snapshot_items` table exists properly?)
-    // M1 implementation summary said "Snapshot for future rendering".
-    // DB schema has `snapshot_items` table. `ctx-storage/src/db.rs` didn't show `create_snapshot_items` but showed `create_snapshot`.
-    // Checking `db.rs`... `create_snapshot` inserts into `snapshots`.
-    // I need `create_snapshot_items` too probably. M1 check revealed `create_snapshot` exists.
-    // The implementation plan didn't explicitly say "implement create_snapshot_items", but "Implement snapshot command".
-    // If I just save the header, that's not enough for M2?
-    // M2 plan says: "Snapshot command ... uses Storage::create_snapshot".
-    // I should probably just implement what's available or add the missing piece if needed.
-    // `db.rs` has `create_snapshot`. It might be missing `add_snapshot_item`.
-    // Let's assume for now we save the snapshot header. 
-    // Wait, M2 deliverables: "Snapshot command".
-    // If I can't save items, the snapshot isn't fully reconstructable?
-    // Actually, `render_hash` + `payload_hash` + immutable blobs means we can verify it.
-    // But `snapshot_items` table exists. I should probably populate it.
-    // Checking `db.rs` content I read earlier... lines 402-418 `create_snapshot`. `get_snapshot`.
-    // No `add_snapshot_item` in `db.rs`? I need to check `db.rs` again or implement it.
-    // For now, I'll allow `snapshot` to just save the main record, and note the missing items implementation if critical, 
-    // OR I can quickly check `db.rs` again.
 
     println!("✓ Snapshot created: {}", snapshot.id);
     println!("  Render Hash: {}", snapshot.render_hash);
-    
+
     Ok(())
 }
