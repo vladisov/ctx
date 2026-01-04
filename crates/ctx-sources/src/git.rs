@@ -126,12 +126,11 @@ mod tests {
             .await
             .unwrap();
 
-        match artifact.artifact_type {
-            ArtifactType::GitDiff { base, head } => {
-                assert_eq!(base, "main");
-                assert_eq!(head, Some("HEAD".to_string()));
-            }
-            _ => panic!("Expected GitDiff type"),
+        if let ArtifactType::GitDiff { base, head } = artifact.artifact_type {
+            assert_eq!(base, "main");
+            assert_eq!(head, Some("HEAD".to_string()));
+        } else {
+            panic!("Expected GitDiff type, got {:?}", artifact.artifact_type);
         }
     }
 }
