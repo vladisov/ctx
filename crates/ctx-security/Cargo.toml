@@ -1,0 +1,22 @@
+[package]
+name = "ctx-security"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+# Regex
+regex = { workspace = true }
+lazy_static = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+
+# File system
+glob = { workspace = true }
+
+[dev-dependencies]

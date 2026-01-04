@@ -1,0 +1,15 @@
+[package]
+name = "ctx-tokens"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+# Token estimation
+tiktoken-rs = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
