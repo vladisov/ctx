@@ -1,0 +1,33 @@
+[package]
+name = "ctx-mcp"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Internal
+ctx-core = { workspace = true }
+ctx-storage = { workspace = true }
+ctx-engine = { workspace = true }
+ctx-security = { workspace = true }
+
+# Hashing
+blake3 = { workspace = true }
+
+# Web Server
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+
+# Async
+tokio = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Logging
+tracing = { workspace = true }

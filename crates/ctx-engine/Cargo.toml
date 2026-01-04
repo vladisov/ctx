@@ -7,7 +7,10 @@ edition = "2021"
 ctx-core = { path = "../ctx-core" }
 ctx-storage = { path = "../ctx-storage" }
 ctx-sources = { path = "../ctx-sources" }
-ctx-security = { path = "../ctx-security" }
+ctx-security = { workspace = true }
+
+# Hashing
+blake3 = { workspace = true }
 ctx-tokens = { path = "../ctx-tokens" }
 
 anyhow = "1.0"

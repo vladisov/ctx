@@ -28,6 +28,46 @@ impl Renderer {
         }
     }
 
+    pub async fn render_request(&self, req: ctx_core::RenderRequest) -> Result<RenderResult> {
+        // Simple sequential rendering and merging for MVP
+        let mut combined_result = RenderResult {
+            budget_tokens: 0,
+            token_estimate: 0,
+            included: Vec::new(),
+            excluded: Vec::new(),
+            redactions: Vec::new(),
+            render_hash: String::new(),
+            payload: Some(String::new()),
+        };
+
+        for pack_id in req.pack_ids {
+             let result = self.render_pack(&pack_id, None).await?;
+             
+             // Merge logic
+             combined_result.budget_tokens += result.budget_tokens;
+             combined_result.token_estimate += result.token_estimate;
+             combined_result.included.extend(result.included);
+             combined_result.excluded.extend(result.excluded);
+             combined_result.redactions.extend(result.redactions);
+             
+             if let Some(payload) = result.payload {
+                 if let Some(ref mut existing) = combined_result.payload {
+                     if !existing.is_empty() {
+                         existing.push_str("\n\n");
+                     }
+                     existing.push_str(&payload);
+                 }
+             }
+        }
+        
+        // Re-calculate hash of combined payload
+        if let Some(ref payload) = combined_result.payload {
+             combined_result.render_hash = blake3::hash(payload.as_bytes()).to_hex().to_string();
+        }
+
+        Ok(combined_result)
+    }
+
     pub async fn render_pack(&self, pack_id: &str, policy_overrides: Option<RenderPolicy>) -> Result<RenderResult> {
         // 1. Get Pack
         let pack = self.storage.get_pack(pack_id).await?;

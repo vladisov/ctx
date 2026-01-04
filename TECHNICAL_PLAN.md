@@ -1276,7 +1276,7 @@ diff out1.txt out2.txt  # Must be identical
 
 ---
 
-### M3: MCP Server (Weeks 5-6)
+### M3: MCP Server (Weeks 5-6) ✅
 
 **Deliverables**:
 - JSON-RPC 2.0 server (Axum)

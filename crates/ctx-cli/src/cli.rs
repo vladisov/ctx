@@ -14,6 +14,18 @@ pub enum Commands {
     /// Manage context packs
     #[command(subcommand)]
     Pack(PackCommands),
+
+    /// Start MCP server
+    Mcp {
+        #[arg(long, default_value = "17373")]
+        port: u16,
+        
+        #[arg(long, default_value = "127.0.0.1")]
+        host: String,
+        
+        #[arg(long, default_value = "false")]
+        read_only: bool,
+    },
 }
 
 #[derive(Subcommand)]

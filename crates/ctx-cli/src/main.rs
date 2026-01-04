@@ -22,5 +22,6 @@ async fn main() -> Result<()> {
 
     match cli.command {
         cli::Commands::Pack(pack_cmd) => commands::pack::handle(pack_cmd, &storage).await,
+        cli::Commands::Mcp { port, host, read_only } => commands::mcp::handle(&storage, host, port, read_only).await,
     }
 }
