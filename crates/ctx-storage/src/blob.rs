@@ -72,7 +72,9 @@ impl BlobStore {
     }
 
     /// Check if a blob exists
-    pub fn exists(&self, hash: &str) -> bool {
-        self.blob_path(hash).exists()
+    pub async fn exists(&self, hash: &str) -> bool {
+        tokio::fs::try_exists(self.blob_path(hash))
+            .await
+            .unwrap_or(false)
     }
 }

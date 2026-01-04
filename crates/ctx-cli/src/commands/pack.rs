@@ -5,11 +5,11 @@ use ctx_storage::Storage;
 
 use crate::cli::PackCommands;
 
-pub async fn handle(cmd: PackCommands) -> Result<()> {
+pub async fn handle(cmd: PackCommands, storage: &Storage) -> Result<()> {
     match cmd {
-        PackCommands::Create { name, tokens } => create(name, tokens).await,
-        PackCommands::List => list().await,
-        PackCommands::Show { pack } => show(pack).await,
+        PackCommands::Create { name, tokens } => create(storage, name, tokens).await,
+        PackCommands::List => list(storage).await,
+        PackCommands::Show { pack } => show(storage, pack).await,
         PackCommands::Add {
             pack,
             source,
@@ -21,17 +21,15 @@ pub async fn handle(cmd: PackCommands) -> Result<()> {
             recursive,
         } => {
             add(
-                pack, source, priority, start, end, max_files, exclude, recursive,
+                storage, pack, source, priority, start, end, max_files, exclude, recursive,
             )
             .await
         }
-        PackCommands::Remove { pack, artifact_id } => remove(pack, artifact_id).await,
+        PackCommands::Remove { pack, artifact_id } => remove(storage, pack, artifact_id).await,
     }
 }
 
-async fn create(name: String, tokens: usize) -> Result<()> {
-    let storage = Storage::new(None).await?;
-
+async fn create(storage: &Storage, name: String, tokens: usize) -> Result<()> {
     let policies = RenderPolicy {
         budget_tokens: tokens,
         ordering: OrderingStrategy::PriorityThenTime,
@@ -47,8 +45,7 @@ async fn create(name: String, tokens: usize) -> Result<()> {
     Ok(())
 }
 
-async fn list() -> Result<()> {
-    let storage = Storage::new(None).await?;
+async fn list(storage: &Storage) -> Result<()> {
     let packs = storage.list_packs().await?;
 
     if packs.is_empty() {
@@ -65,14 +62,9 @@ async fn list() -> Result<()> {
     Ok(())
 }
 
-async fn show(pack_name: String) -> Result<()> {
-    let storage = Storage::new(None).await?;
-
-    // Try to get pack by name first, then by ID
-    let pack = match storage.get_pack_by_name(&pack_name).await {
-        Ok(pack) => pack,
-        Err(_) => storage.get_pack_by_id(&pack_name).await?,
-    };
+async fn show(storage: &Storage, pack_name: String) -> Result<()> {
+    // Get pack by name or ID
+    let pack = storage.get_pack(&pack_name).await?;
 
     println!("Pack: {}", pack.name);
     println!("  ID: {}", pack.id);
@@ -97,6 +89,7 @@ async fn show(pack_name: String) -> Result<()> {
 }
 
 async fn add(
+    storage: &Storage,
     pack_name: String,
     source: String,
     priority: i64,
@@ -106,14 +99,10 @@ async fn add(
     exclude: Vec<String>,
     recursive: bool,
 ) -> Result<()> {
-    let storage = Storage::new(None).await?;
     let registry = SourceHandlerRegistry::new();
 
     // Get pack
-    let pack = match storage.get_pack_by_name(&pack_name).await {
-        Ok(pack) => pack,
-        Err(_) => storage.get_pack_by_id(&pack_name).await?,
-    };
+    let pack = storage.get_pack(&pack_name).await?;
 
     // Parse source into artifact
     let options = SourceOptions {
@@ -126,12 +115,12 @@ async fn add(
 
     let artifact = registry.parse(&source, options).await?;
 
-    // Store artifact
-    storage.create_artifact(&artifact).await?;
+    // Load artifact content
+    let content = registry.load(&artifact).await?;
 
-    // Add to pack
+    // Store artifact with content and add to pack (atomic transaction)
     storage
-        .add_artifact_to_pack(&pack.id, &artifact.id, priority)
+        .add_artifact_to_pack_with_content(&pack.id, &artifact, &content, priority)
         .await?;
 
     println!("✓ Added artifact to pack '{}'", pack.name);
@@ -142,14 +131,9 @@ async fn add(
     Ok(())
 }
 
-async fn remove(pack_name: String, artifact_id: String) -> Result<()> {
-    let storage = Storage::new(None).await?;
-
+async fn remove(storage: &Storage, pack_name: String, artifact_id: String) -> Result<()> {
     // Get pack
-    let pack = match storage.get_pack_by_name(&pack_name).await {
-        Ok(pack) => pack,
-        Err(_) => storage.get_pack_by_id(&pack_name).await?,
-    };
+    let pack = storage.get_pack(&pack_name).await?;
 
     // Remove artifact from pack
     storage

@@ -3,6 +3,7 @@ mod commands;
 
 use anyhow::Result;
 use clap::Parser;
+use ctx_storage::Storage;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -16,7 +17,10 @@ async fn main() -> Result<()> {
 
     let cli = cli::Cli::parse();
 
+    // Initialize storage once (creates connection pool and runs migrations)
+    let storage = Storage::new(None).await?;
+
     match cli.command {
-        cli::Commands::Pack(pack_cmd) => commands::pack::handle(pack_cmd).await,
+        cli::Commands::Pack(pack_cmd) => commands::pack::handle(pack_cmd, &storage).await,
     }
 }

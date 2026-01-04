@@ -5,9 +5,11 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use crate::models::PackItem;
+use crate::blob::BlobStore;
 
 pub struct Storage {
     pool: SqlitePool,
+    blob_store: BlobStore,
 }
 
 impl Storage {
@@ -29,24 +31,72 @@ impl Storage {
             .await
             .map_err(|e| Error::Database(e.to_string()))?;
 
-        let storage = Self { pool };
+        let blob_store = BlobStore::new(None);
+
+        let storage = Self { pool, blob_store };
         storage.run_migrations().await?;
 
         Ok(storage)
     }
 
     async fn run_migrations(&self) -> Result<()> {
-        let migration_sql = include_str!("migrations/001_initial.sql");
+        // Create migrations tracking table
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS _migrations (
+                version INTEGER PRIMARY KEY,
+                applied_at INTEGER NOT NULL
+            )"
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(|e| Error::Database(format!("Failed to create migrations table: {}", e)))?;
 
-        sqlx::query(migration_sql)
-            .execute(&self.pool)
+        // Check if migration 1 has been applied
+        let applied: Option<i64> = sqlx::query_scalar("SELECT version FROM _migrations WHERE version = 1")
+            .fetch_optional(&self.pool)
             .await
-            .map_err(|e| Error::Database(e.to_string()))?;
+            .map_err(|e| Error::Database(format!("Failed to check migration status: {}", e)))?;
+
+        if applied.is_none() {
+            // Run migration 1
+            let migration_sql = include_str!("migrations/001_initial.sql");
+
+            sqlx::query(migration_sql)
+                .execute(&self.pool)
+                .await
+                .map_err(|e| Error::Database(format!("Failed to run migration 001: {}", e)))?;
+
+            // Mark as applied
+            sqlx::query("INSERT INTO _migrations (version, applied_at) VALUES (1, ?)")
+                .bind(time::OffsetDateTime::now_utc().unix_timestamp())
+                .execute(&self.pool)
+                .await
+                .map_err(|e| Error::Database(format!("Failed to mark migration as applied: {}", e)))?;
+        }
 
         Ok(())
     }
 
     // Pack operations
+
+    /// Get pack by name or ID in a single query
+    pub async fn get_pack(&self, name_or_id: &str) -> Result<Pack> {
+        let row = sqlx::query(
+            "SELECT pack_id, name, policies_json, created_at, updated_at
+             FROM packs
+             WHERE pack_id = ? OR name = ?
+             LIMIT 1",
+        )
+        .bind(name_or_id)
+        .bind(name_or_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| Error::Database(format!("Failed to fetch pack '{}': {}", name_or_id, e)))?
+        .ok_or_else(|| Error::PackNotFound(name_or_id.to_string()))?;
+
+        self.row_to_pack(row)
+    }
+
     pub async fn create_pack(&self, pack: &Pack) -> Result<()> {
         let policies_json = serde_json::to_string(&pack.policies)?;
 
@@ -79,24 +129,10 @@ impl Storage {
         .bind(name)
         .fetch_optional(&self.pool)
         .await
-        .map_err(|e| Error::Database(e.to_string()))?
+        .map_err(|e| Error::Database(format!("Failed to fetch pack by name '{}': {}", name, e)))?
         .ok_or_else(|| Error::PackNotFound(name.to_string()))?;
 
-        let id: String = row.get("pack_id");
-        let name: String = row.get("name");
-        let policies_json: String = row.get("policies_json");
-        let created_at: i64 = row.get("created_at");
-        let updated_at: i64 = row.get("updated_at");
-
-        Ok(Pack {
-            id,
-            name,
-            policies: serde_json::from_str(&policies_json)?,
-            created_at: time::OffsetDateTime::from_unix_timestamp(created_at)
-                .map_err(|e| Error::Other(e.into()))?,
-            updated_at: time::OffsetDateTime::from_unix_timestamp(updated_at)
-                .map_err(|e| Error::Other(e.into()))?,
-        })
+        self.row_to_pack(row)
     }
 
     pub async fn get_pack_by_id(&self, id: &str) -> Result<Pack> {
@@ -106,24 +142,10 @@ impl Storage {
         .bind(id)
         .fetch_optional(&self.pool)
         .await
-        .map_err(|e| Error::Database(e.to_string()))?
+        .map_err(|e| Error::Database(format!("Failed to fetch pack by id '{}': {}", id, e)))?
         .ok_or_else(|| Error::PackNotFound(id.to_string()))?;
 
-        let id: String = row.get("pack_id");
-        let name: String = row.get("name");
-        let policies_json: String = row.get("policies_json");
-        let created_at: i64 = row.get("created_at");
-        let updated_at: i64 = row.get("updated_at");
-
-        Ok(Pack {
-            id,
-            name,
-            policies: serde_json::from_str(&policies_json)?,
-            created_at: time::OffsetDateTime::from_unix_timestamp(created_at)
-                .map_err(|e| Error::Other(e.into()))?,
-            updated_at: time::OffsetDateTime::from_unix_timestamp(updated_at)
-                .map_err(|e| Error::Other(e.into()))?,
-        })
+        self.row_to_pack(row)
     }
 
     pub async fn list_packs(&self) -> Result<Vec<Pack>> {
@@ -132,31 +154,29 @@ impl Storage {
         )
         .fetch_all(&self.pool)
         .await
-        .map_err(|e| Error::Database(e.to_string()))?;
+        .map_err(|e| Error::Database(format!("Failed to list packs: {}", e)))?;
 
-        let mut packs = Vec::new();
-        for row in rows {
-            let id: String = row.get("pack_id");
-            let name: String = row.get("name");
-            let policies_json: String = row.get("policies_json");
-            let created_at: i64 = row.get("created_at");
-            let updated_at: i64 = row.get("updated_at");
-
-            packs.push(Pack {
-                id,
-                name,
-                policies: serde_json::from_str(&policies_json)?,
-                created_at: time::OffsetDateTime::from_unix_timestamp(created_at)
-                    .map_err(|e| Error::Other(e.into()))?,
-                updated_at: time::OffsetDateTime::from_unix_timestamp(updated_at)
-                    .map_err(|e| Error::Other(e.into()))?,
-            });
-        }
-
-        Ok(packs)
+        rows.into_iter()
+            .map(|row| self.row_to_pack(row))
+            .collect()
     }
 
     // Artifact operations
+
+    /// Create artifact and store its content in blob storage
+    pub async fn create_artifact_with_content(&self, artifact: &Artifact, content: &str) -> Result<String> {
+        // Store content in blob storage
+        let content_hash = self.blob_store.store(content.as_bytes()).await?;
+
+        // Create artifact with the hash
+        let mut artifact_with_hash = artifact.clone();
+        artifact_with_hash.content_hash = Some(content_hash.clone());
+
+        self.create_artifact(&artifact_with_hash).await?;
+
+        Ok(content_hash)
+    }
+
     pub async fn create_artifact(&self, artifact: &Artifact) -> Result<()> {
         let type_json = serde_json::to_string(&artifact.artifact_type)?;
         let meta_json = serde_json::to_string(&artifact.metadata)?;
@@ -174,9 +194,20 @@ impl Storage {
         .bind(artifact.created_at.unix_timestamp())
         .execute(&self.pool)
         .await
-        .map_err(|e| Error::Database(e.to_string()))?;
+        .map_err(|e| Error::Database(format!("Failed to create artifact: {}", e)))?;
 
         Ok(())
+    }
+
+    /// Load artifact content from blob storage
+    pub async fn load_artifact_content(&self, artifact: &Artifact) -> Result<String> {
+        let content_hash = artifact.content_hash.as_ref()
+            .ok_or_else(|| Error::Other(anyhow::anyhow!("Artifact has no content hash")))?;
+
+        let content_bytes = self.blob_store.retrieve(content_hash).await?;
+
+        String::from_utf8(content_bytes)
+            .map_err(|e| Error::Other(anyhow::anyhow!("Invalid UTF-8 in artifact content: {}", e)))
     }
 
     pub async fn get_artifact(&self, id: &str) -> Result<Artifact> {
@@ -193,6 +224,25 @@ impl Storage {
         self.row_to_artifact(row)
     }
 
+    fn row_to_pack(&self, row: sqlx::sqlite::SqliteRow) -> Result<Pack> {
+        let id: String = row.get("pack_id");
+        let name: String = row.get("name");
+        let policies_json: String = row.get("policies_json");
+        let created_at: i64 = row.get("created_at");
+        let updated_at: i64 = row.get("updated_at");
+
+        Ok(Pack {
+            id,
+            name,
+            policies: serde_json::from_str(&policies_json)
+                .map_err(|e| Error::Other(anyhow::anyhow!("Failed to parse policies JSON: {}", e)))?,
+            created_at: time::OffsetDateTime::from_unix_timestamp(created_at)
+                .map_err(|e| Error::Other(e.into()))?,
+            updated_at: time::OffsetDateTime::from_unix_timestamp(updated_at)
+                .map_err(|e| Error::Other(e.into()))?,
+        })
+    }
+
     fn row_to_artifact(&self, row: sqlx::sqlite::SqliteRow) -> Result<Artifact> {
         let id: String = row.get("artifact_id");
         let type_json: String = row.get("type_json");
@@ -204,10 +254,12 @@ impl Storage {
 
         Ok(Artifact {
             id,
-            artifact_type: serde_json::from_str(&type_json)?,
+            artifact_type: serde_json::from_str(&type_json)
+                .map_err(|e| Error::Other(anyhow::anyhow!("Failed to parse artifact type JSON: {}", e)))?,
             source_uri,
             content_hash,
-            metadata: serde_json::from_str(&meta_json)?,
+            metadata: serde_json::from_str(&meta_json)
+                .map_err(|e| Error::Other(anyhow::anyhow!("Failed to parse metadata JSON: {}", e)))?,
             token_estimate: token_est as usize,
             created_at: time::OffsetDateTime::from_unix_timestamp(created_at)
                 .map_err(|e| Error::Other(e.into()))?,
@@ -215,6 +267,65 @@ impl Storage {
     }
 
     // Pack-Artifact association operations
+
+    /// Add artifact to pack with content, using a transaction for atomicity
+    pub async fn add_artifact_to_pack_with_content(
+        &self,
+        pack_id: &str,
+        artifact: &Artifact,
+        content: &str,
+        priority: i64,
+    ) -> Result<String> {
+        let mut tx = self.pool.begin().await
+            .map_err(|e| Error::Database(format!("Failed to begin transaction: {}", e)))?;
+
+        // Store content in blob storage
+        let content_hash = self.blob_store.store(content.as_bytes()).await?;
+
+        // Create artifact with the hash
+        let mut artifact_with_hash = artifact.clone();
+        artifact_with_hash.content_hash = Some(content_hash.clone());
+
+        // Insert artifact
+        let type_json = serde_json::to_string(&artifact_with_hash.artifact_type)?;
+        let meta_json = serde_json::to_string(&artifact_with_hash.metadata)?;
+
+        sqlx::query(
+            "INSERT INTO artifacts (artifact_id, type_json, source_uri, content_hash, meta_json, token_est, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&artifact_with_hash.id)
+        .bind(&type_json)
+        .bind(&artifact_with_hash.source_uri)
+        .bind(&artifact_with_hash.content_hash)
+        .bind(&meta_json)
+        .bind(artifact_with_hash.token_estimate as i64)
+        .bind(artifact_with_hash.created_at.unix_timestamp())
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| Error::Database(format!("Failed to create artifact in transaction: {}", e)))?;
+
+        // Add to pack
+        let added_at = time::OffsetDateTime::now_utc();
+        sqlx::query(
+            "INSERT INTO pack_items (pack_id, artifact_id, priority, added_at)
+             VALUES (?, ?, ?, ?)",
+        )
+        .bind(pack_id)
+        .bind(&artifact_with_hash.id)
+        .bind(priority)
+        .bind(added_at.unix_timestamp())
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| Error::Database(format!("Failed to add artifact to pack in transaction: {}", e)))?;
+
+        // Commit transaction
+        tx.commit().await
+            .map_err(|e| Error::Database(format!("Failed to commit transaction: {}", e)))?;
+
+        Ok(content_hash)
+    }
+
     pub async fn add_artifact_to_pack(
         &self,
         pack_id: &str,
@@ -233,7 +344,7 @@ impl Storage {
         .bind(added_at.unix_timestamp())
         .execute(&self.pool)
         .await
-        .map_err(|e| Error::Database(e.to_string()))?;
+        .map_err(|e| Error::Database(format!("Failed to add artifact to pack: {}", e)))?;
 
         Ok(())
     }
