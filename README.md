@@ -6,7 +6,13 @@
 
 ## Status
 
-🚧 **In Development** - MVP Phase
+🚧 **In Development** - M2 Complete (Preview + Snapshot)
+
+## Documentation
+
+- **[User Guide (WALKTHROUGH.md)](./WALKTHROUGH.md)**: How to install and use `ctx`.
+- **[Developer Guide (GETTING_STARTED.md)](./GETTING_STARTED.md)**: How to build and contribute.
+- **[Technical Plan (TECHNICAL_PLAN.md)](./TECHNICAL_PLAN.md)**: Architecture and roadmap.
 
 ## What is ctx?
 
@@ -127,7 +133,7 @@ ctx/
 - Pack CRUD operations
 - Basic source handlers (file, glob, text)
 
-### M2: Render + Snapshot 🔨 (Weeks 3-4)
+### M2: Render + Snapshot ✅ (Weeks 3-4)
 - Deterministic render engine
 - Token estimation
 - Redaction

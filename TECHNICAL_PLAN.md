@@ -1129,7 +1129,7 @@ fn tool_schema(name: &str, description: &str, input_schema: serde_json::Value) -
 
 ## 6. Milestone Implementation Plan
 
-### M1: Packs + Persistence (Weeks 1-2)
+### M1: Packs + Persistence (Weeks 1-2) ✅
 
 **Deliverables**:
 - SQLite database with migrations
@@ -1202,7 +1202,7 @@ ls -la ~/.ctx/blobs/
 
 ---
 
-### M2: Render + Preview + Snapshot (Weeks 3-4)
+### M2: Render + Preview + Snapshot (Weeks 3-4) ✅
 
 **Deliverables**:
 - Deterministic render engine

@@ -99,21 +99,20 @@ cargo run -- pack list
 
 ---
 
-## Current Status (M1)
+## Current Status (M2 Complete)
 
 ✅ **Implemented**:
 - Pack CRUD operations
 - Artifact management (file, text, collections)
 - SQLite storage with migrations
 - Blob storage (content-addressable)
-- CLI commands
+- **Token estimation** (Basic)
+- **Rendering engine** (Deterministic)
+- **Preview & Snapshot** commands
 
-⏳ **TODO (M2-M4)**:
-- Token estimation (M2)
-- Redaction (M2)
-- Rendering (M2)
-- Snapshots (M2)
-- MCP server (M3)
+⏳ **TODO (M3-M4)**:
+- Deep Source Integration (Git, etc.) - M3
+- MCP server - M3
 
 See [M1_COMPLETE.md](./M1_COMPLETE.md) for details.
 

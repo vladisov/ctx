@@ -124,13 +124,25 @@ async fn add(
 
     let artifact = registry.parse(&source, options).await?;
 
-    // Load artifact content
-    let content = registry.load(&artifact).await?;
+    // Check if artifact is a collection
+    let is_collection = matches!(
+        artifact.artifact_type,
+        ctx_core::ArtifactType::CollectionMdDir { .. } | ctx_core::ArtifactType::CollectionGlob { .. }
+    );
 
-    // Store artifact with content and add to pack (atomic transaction)
-    storage
-        .add_artifact_to_pack_with_content(&pack.id, &artifact, &content, priority)
-        .await?;
+    if is_collection {
+        // Collections don't have content to load immediately
+        storage.create_artifact(&artifact).await?;
+        storage.add_artifact_to_pack(&pack.id, &artifact.id, priority).await?;
+    } else {
+        // Load artifact content
+        let content = registry.load(&artifact).await?;
+
+        // Store artifact with content and add to pack (atomic transaction)
+        storage
+            .add_artifact_to_pack_with_content(&pack.id, &artifact, &content, priority)
+            .await?;
+    }
 
     println!("✓ Added artifact to pack '{}'", pack.name);
     println!("  Artifact ID: {}", artifact.id);

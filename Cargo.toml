@@ -8,6 +8,7 @@ members = [
     "crates/ctx-tokens",
     "crates/ctx-engine",
 ]
+default-members = ["crates/ctx-cli"]
 resolver = "2"
 
 [workspace.package]
