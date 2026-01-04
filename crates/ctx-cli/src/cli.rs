@@ -78,4 +78,36 @@ pub enum PackCommands {
         /// Artifact ID to remove
         artifact_id: String,
     },
+
+    /// Preview pack rendering
+    Preview {
+        /// Pack name or ID
+        pack: String,
+
+        /// Additional packs to merge
+        #[arg(long = "with-pack")]
+        with_packs: Vec<String>,
+
+        /// Show token counts
+        #[arg(long)]
+        tokens: bool,
+
+        /// Show redaction details
+        #[arg(long)]
+        redactions: bool,
+
+        /// Show the rendered payload
+        #[arg(long)]
+        show_payload: bool,
+    },
+
+    /// Create a snapshot of a pack
+    Snapshot {
+        /// Pack name or ID
+        pack: String,
+
+        /// Optional label for the snapshot
+        #[arg(long)]
+        label: Option<String>,
+    },
 }

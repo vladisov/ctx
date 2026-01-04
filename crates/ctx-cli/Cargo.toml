@@ -10,12 +10,15 @@ path = "src/main.rs"
 
 [dependencies]
 ctx-core = { workspace = true }
+ctx-tokens = { path = "../ctx-tokens" }
+ctx-engine = { path = "../ctx-engine" }
 ctx-storage = { workspace = true }
 ctx-sources = { workspace = true }
 
 clap = { workspace = true }
-tokio = { workspace = true }
-anyhow = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true }
+blake3 = { workspace = true }

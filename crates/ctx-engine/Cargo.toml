@@ -1,0 +1,16 @@
+[package]
+name = "ctx-engine"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ctx-core = { path = "../ctx-core" }
+ctx-storage = { path = "../ctx-storage" }
+ctx-sources = { path = "../ctx-sources" }
+ctx-security = { path = "../ctx-security" }
+ctx-tokens = { path = "../ctx-tokens" }
+
+anyhow = "1.0"
+tokio = { version = "1.35", features = ["full"] }
+tracing = "0.1"
+serde_json = "1.0"

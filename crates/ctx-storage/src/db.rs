@@ -7,6 +7,7 @@ use std::str::FromStr;
 use crate::models::PackItem;
 use crate::blob::BlobStore;
 
+#[derive(Clone)]
 pub struct Storage {
     pool: SqlitePool,
     blob_store: BlobStore,

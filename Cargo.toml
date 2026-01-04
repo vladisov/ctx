@@ -6,6 +6,7 @@ members = [
     "crates/ctx-sources",
     "crates/ctx-security",
     "crates/ctx-tokens",
+    "crates/ctx-engine",
 ]
 resolver = "2"
 

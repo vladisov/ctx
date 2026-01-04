@@ -5,4 +5,5 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-# Placeholder for M4
+regex = { workspace = true }
+serde = { workspace = true }

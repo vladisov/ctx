@@ -1,11 +1,16 @@
 pub mod artifact;
 pub mod error;
 pub mod pack;
+pub mod render;
 pub mod snapshot;
 
 pub use artifact::{Artifact, ArtifactMetadata, ArtifactType};
 pub use error::{Error, Result};
 pub use pack::{OrderingStrategy, Pack, RenderPolicy};
+pub use render::{
+    ArtifactSummary, ExclusionInfo, ProcessedArtifact, RedactionSummary, RenderEngine,
+    RenderRequest, RenderResult,
+};
 pub use snapshot::{RenderItemMetadata, Snapshot, SnapshotItem};
 
 #[cfg(test)]

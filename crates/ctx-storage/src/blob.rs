@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use tokio::fs;
 
 /// Content-addressable blob storage using BLAKE3 hashing
+#[derive(Clone)]
 pub struct BlobStore {
     root: PathBuf,
 }

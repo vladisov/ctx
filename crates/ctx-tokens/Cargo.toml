@@ -5,4 +5,5 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-# Placeholder for M2
+tiktoken-rs = "0.5"
+anyhow = { workspace = true }
