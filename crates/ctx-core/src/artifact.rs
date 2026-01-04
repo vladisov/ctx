@@ -67,6 +67,11 @@ pub enum ArtifactType {
     Text {
         content: String,
     },
+    GitDiff {
+        base: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        head: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

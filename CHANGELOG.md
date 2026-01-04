@@ -4,6 +4,30 @@ All notable changes and milestones for the ctx project.
 
 ---
 
+## M4: Hardening (2026-01-04) ✅
+
+**Summary**: Configuration system, security hardening with denylist, git diff support, and integration testing.
+
+### Features
+- Configuration file at `~/.ctx/config.toml` (auto-created)
+- Denylist patterns to block sensitive files (.env, .aws, secrets, keys, etc.)
+- Git diff source handler: `git:diff [--base=REF] [--head=REF]`
+- Integration test suite (10 tests covering core functionality)
+- Config-based defaults for token budget and MCP settings
+
+### Implementation
+- New crate: `ctx-config` for TOML configuration management
+- Denylist module in `ctx-sources` with glob pattern matching
+- Git handler using command-line `git diff`
+- Denylist validation during artifact addition
+- Config defaults: 128K tokens, deny patterns for common secrets
+
+### Testing
+- Integration test script: `tests/integration_test.sh`
+- Tests cover: pack creation, artifacts, denylist, preview, snapshot, determinism
+
+---
+
 ## M3: MCP Server (2026-01-04) ✅
 
 **Summary**: JSON-RPC 2.0 server for exposing ctx functionality to MCP-compatible AI agents.

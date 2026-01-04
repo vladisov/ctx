@@ -113,12 +113,12 @@ impl Renderer {
 
     async fn expand_artifact(&self, artifact: &ctx_core::Artifact) -> Result<Vec<ctx_core::Artifact>> {
          use ctx_core::ArtifactType;
-         
+
          match &artifact.artifact_type {
              ArtifactType::CollectionMdDir { path, max_files, exclude, recursive } => {
                 let handler = ctx_sources::collection::CollectionHandler;
-                let paths = handler.expand_md_dir(path, *max_files, &exclude, *recursive).await?;
-                
+                let paths = handler.expand_md_dir(path, *max_files, exclude, *recursive).await?;
+
                 let mut expanded = Vec::new();
                 for p in paths {
                      // Parse each file as a new artifact
@@ -131,7 +131,7 @@ impl Renderer {
              ArtifactType::CollectionGlob { pattern } => {
                 let handler = ctx_sources::collection::CollectionHandler;
                 let paths = handler.expand_glob(pattern).await?;
-                
+
                 let mut expanded = Vec::new();
                 for p in paths {
                      let uri = format!("file:{}", p);

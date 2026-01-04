@@ -66,6 +66,16 @@ ctx pack add demo glob:"src/**/*.rs" --priority 10
 ctx pack add demo glob:"data/*.json"
 ```
 
+### Git Diffs (`git:`)
+Add git diffs for code review context.
+```bash
+# Diff working tree vs HEAD
+ctx pack add demo git:diff
+
+# Diff between branches
+ctx pack add demo 'git:diff --base=main --head=feature-branch'
+```
+
 ## 4. Previewing Context
 
 Before sending to an LLM, check what `ctx` will generate.

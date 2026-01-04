@@ -1,14 +1,19 @@
 use anyhow::Result;
+use ctx_config::Config;
 use ctx_core::{OrderingStrategy, Pack, RenderPolicy, Snapshot};
-use ctx_sources::{SourceHandlerRegistry, SourceOptions};
+use ctx_sources::{Denylist, SourceHandlerRegistry, SourceOptions};
 use ctx_storage::Storage;
-use ctx_engine::Renderer; // Added
+use ctx_engine::Renderer;
 
 use crate::cli::PackCommands;
 
-pub async fn handle(cmd: PackCommands, storage: &Storage) -> Result<()> {
+pub async fn handle(cmd: PackCommands, storage: &Storage, config: &Config) -> Result<()> {
+    let denylist = Denylist::new(config.denylist.patterns.clone());
     match cmd {
-        PackCommands::Create { name, tokens } => create(storage, name, tokens).await,
+        PackCommands::Create { name, tokens } => {
+            let budget = tokens.unwrap_or(config.budget_tokens);
+            create(storage, name, budget).await
+        }
         PackCommands::List => list(storage).await,
         PackCommands::Show { pack } => show(storage, pack).await,
         PackCommands::Add {
@@ -22,7 +27,7 @@ pub async fn handle(cmd: PackCommands, storage: &Storage) -> Result<()> {
             recursive,
         } => {
             add(
-                storage, pack, source, priority, start, end, max_files, exclude, recursive,
+                storage, &denylist, pack, source, priority, start, end, max_files, exclude, recursive,
             )
             .await
         }
@@ -98,6 +103,7 @@ async fn show(storage: &Storage, pack_name: String) -> Result<()> {
 
 async fn add(
     storage: &Storage,
+    denylist: &Denylist,
     pack_name: String,
     source: String,
     priority: i64,
@@ -122,6 +128,17 @@ async fn add(
     };
 
     let artifact = registry.parse(&source, options).await?;
+
+    // Check denylist for file artifacts
+    if let ctx_core::ArtifactType::File { path } | ctx_core::ArtifactType::FileRange { path, .. } = &artifact.artifact_type {
+        if denylist.is_denied(path) {
+            let pattern = denylist.matching_pattern(path).unwrap_or_else(|| "unknown".to_string());
+            anyhow::bail!(
+                "File '{}' is denied by pattern '{}'. This file may contain sensitive information.",
+                path, pattern
+            );
+        }
+    }
 
     // Check if artifact is a collection
     let is_collection = matches!(

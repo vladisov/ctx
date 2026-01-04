@@ -3,6 +3,7 @@ mod commands;
 
 use anyhow::Result;
 use clap::Parser;
+use ctx_config::Config;
 use ctx_storage::Storage;
 
 #[tokio::main]
@@ -17,11 +18,19 @@ async fn main() -> Result<()> {
 
     let cli = cli::Cli::parse();
 
+    // Load config (creates default if not found)
+    let config = Config::load()?;
+
     // Initialize storage once (creates connection pool and runs migrations)
     let storage = Storage::new(None).await?;
 
     match cli.command {
-        cli::Commands::Pack(pack_cmd) => commands::pack::handle(pack_cmd, &storage).await,
-        cli::Commands::Mcp { port, host, read_only } => commands::mcp::handle(&storage, host, port, read_only).await,
+        cli::Commands::Pack(pack_cmd) => commands::pack::handle(pack_cmd, &storage, &config).await,
+        cli::Commands::Mcp { port, host, read_only } => {
+            let port = port.unwrap_or(config.mcp.port);
+            let host = host.unwrap_or(config.mcp.host);
+            let read_only = read_only || config.mcp.read_only;
+            commands::mcp::handle(&storage, host, port, read_only).await
+        }
     }
 }

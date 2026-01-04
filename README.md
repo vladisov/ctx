@@ -6,7 +6,7 @@
 
 ## Status
 
-✅ **M2 + M3 Complete** - Render Engine, Snapshot, MCP Server
+✅ **MVP Complete (M1-M4)** - Production-ready context management for LLMs
 
 ## Documentation
 
@@ -40,7 +40,7 @@
 ctx pack create my-feature
 ctx pack add my-feature file:src/auth.rs
 ctx pack add my-feature 'glob:tests/**/*.rs'
-ctx pack add my-feature 'git:diff --base=main --head=HEAD'
+ctx pack add my-feature 'git:diff --base=main'
 
 # Preview what will be sent to LLM
 ctx pack preview my-feature --tokens
@@ -104,9 +104,11 @@ ctx/
 │   ├── ctx-cli/          # Binary crate
 │   ├── ctx-core/         # Core domain logic
 │   ├── ctx-storage/      # SQLite + blob storage
-│   ├── ctx-sources/      # Source handlers (file, git, glob, etc.)
-│   ├── ctx-security/     # Redaction + denylist
+│   ├── ctx-sources/      # Source handlers (file, git, glob)
+│   ├── ctx-security/     # Redaction engine
 │   ├── ctx-tokens/       # Token estimation
+│   ├── ctx-engine/       # Render orchestration
+│   ├── ctx-config/       # Configuration management
 │   └── ctx-mcp/          # MCP server
 ```
 
@@ -144,11 +146,11 @@ ctx/
 - MCP tools (list, get, preview, snapshot)
 - Integration with render engine
 
-### M4: Hardening 📋 (Weeks 7-8)
-- Security features
-- Git diff handler
-- Configuration system
-- Documentation
+### M4: Hardening ✅
+- Configuration system (~/.ctx/config.toml)
+- Denylist for sensitive files
+- Git diff handler (git:diff)
+- Integration tests
 
 ## Getting Started (Developers)
 
@@ -172,9 +174,26 @@ See [TECHNICAL_PLAN.md](./TECHNICAL_PLAN.md) for detailed implementation guide.
 
 ## Configuration
 
-🚧 Configuration system planned for M4.
+Config file: `~/.ctx/config.toml` (auto-created on first run)
 
-Default settings: 128K token budget, MCP server on port 17373.
+```toml
+budget_tokens = 128000
+
+[denylist]
+patterns = [
+  "**/.env*",
+  "**/.aws/**",
+  "**/secrets/**",
+  "**/*_rsa",
+  "**/*.key",
+  "**/*.pem"
+]
+
+[mcp]
+host = "127.0.0.1"
+port = 17373
+read_only = false
+```
 
 ## Security
 

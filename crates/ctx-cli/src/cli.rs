@@ -17,13 +17,13 @@ pub enum Commands {
 
     /// Start MCP server
     Mcp {
-        #[arg(long, default_value = "17373")]
-        port: u16,
-        
-        #[arg(long, default_value = "127.0.0.1")]
-        host: String,
-        
-        #[arg(long, default_value = "false")]
+        #[arg(long)]
+        port: Option<u16>,
+
+        #[arg(long)]
+        host: Option<String>,
+
+        #[arg(long)]
         read_only: bool,
     },
 }
@@ -35,9 +35,9 @@ pub enum PackCommands {
         /// Name of the pack
         name: String,
 
-        /// Token budget (default: 128000)
-        #[arg(long, default_value = "128000")]
-        tokens: usize,
+        /// Token budget (default from config: 128000)
+        #[arg(long)]
+        tokens: Option<usize>,
     },
 
     /// List all packs
