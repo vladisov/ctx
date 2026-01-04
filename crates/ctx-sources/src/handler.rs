@@ -1,40 +1,79 @@
-//! Source handler trait
-
 use async_trait::async_trait;
-use ctx_core::Artifact;
+use ctx_core::{Artifact, Error, Result};
+use std::sync::Arc;
 
-/// Options for parsing source URIs
 #[derive(Debug, Clone, Default)]
 pub struct SourceOptions {
     pub range: Option<(usize, usize)>,
     pub max_files: Option<usize>,
     pub exclude: Vec<String>,
     pub recursive: bool,
-    pub base: Option<String>,
-    pub head: Option<String>,
-    pub capture: bool,
+    pub priority: i64,
 }
 
-/// Trait for handling different source types
 #[async_trait]
 pub trait SourceHandler: Send + Sync {
     /// Parse source URI into artifact metadata
-    async fn parse(&self, uri: &str, options: SourceOptions) -> anyhow::Result<Artifact>;
+    async fn parse(&self, uri: &str, options: SourceOptions) -> Result<Artifact>;
 
     /// Load content from source (called during render)
-    async fn load(&self, artifact: &Artifact) -> anyhow::Result<String>;
-
-    /// Expand collection into individual artifacts (for collections only)
-    async fn expand(&self, artifact: &Artifact) -> anyhow::Result<Vec<Artifact>>;
+    async fn load(&self, artifact: &Artifact) -> Result<String>;
 
     /// Check if this handler can handle the given URI
     fn can_handle(&self, uri: &str) -> bool;
 }
 
-// TODO: Implement handlers in M1:
-// - FileHandler (file:path, file:path#Lx-Ly)
-// - CollectionHandler (md_dir:path, glob:pattern)
-// - TextHandler (text:content)
-// TODO: Implement in M4:
-// - GitHandler (git:diff)
-// - CommandHandler (cmd:command)
+pub struct SourceHandlerRegistry {
+    handlers: Vec<Arc<dyn SourceHandler>>,
+}
+
+impl SourceHandlerRegistry {
+    pub fn new() -> Self {
+        let mut registry = Self {
+            handlers: Vec::new(),
+        };
+
+        // Register built-in handlers
+        registry.register(Arc::new(crate::file::FileHandler));
+        registry.register(Arc::new(crate::text::TextHandler));
+        registry.register(Arc::new(crate::collection::CollectionHandler));
+
+        registry
+    }
+
+    pub fn register(&mut self, handler: Arc<dyn SourceHandler>) {
+        self.handlers.push(handler);
+    }
+
+    pub async fn parse(&self, uri: &str, options: SourceOptions) -> Result<Artifact> {
+        for handler in &self.handlers {
+            if handler.can_handle(uri) {
+                return handler.parse(uri, options).await;
+            }
+        }
+
+        Err(Error::InvalidSourceUri(format!(
+            "No handler found for URI: {}",
+            uri
+        )))
+    }
+
+    pub async fn load(&self, artifact: &Artifact) -> Result<String> {
+        for handler in &self.handlers {
+            if handler.can_handle(&artifact.source_uri) {
+                return handler.load(artifact).await;
+            }
+        }
+
+        Err(Error::InvalidSourceUri(format!(
+            "No handler found for URI: {}",
+            artifact.source_uri
+        )))
+    }
+}
+
+impl Default for SourceHandlerRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}

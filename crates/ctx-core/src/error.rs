@@ -1,22 +1,21 @@
-//! Error types for ctx-core
-
 use thiserror::Error;
 
-pub type Result<T> = std::result::Result<T, CoreError>;
-
 #[derive(Error, Debug)]
-pub enum CoreError {
+pub enum Error {
     #[error("Pack not found: {0}")]
     PackNotFound(String),
 
     #[error("Artifact not found: {0}")]
     ArtifactNotFound(String),
 
-    #[error("Invalid artifact type: {0}")]
-    InvalidArtifactType(String),
+    #[error("Snapshot not found: {0}")]
+    SnapshotNotFound(String),
 
-    #[error("Render error: {0}")]
-    RenderError(String),
+    #[error("Pack already exists: {0}")]
+    PackAlreadyExists(String),
+
+    #[error("Invalid source URI: {0}")]
+    InvalidSourceUri(String),
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
@@ -24,6 +23,11 @@ pub enum CoreError {
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
 
-    #[error(transparent)]
+    #[error("Database error: {0}")]
+    Database(String),
+
+    #[error("Other error: {0}")]
     Other(#[from] anyhow::Error),
 }
+
+pub type Result<T> = std::result::Result<T, Error>;

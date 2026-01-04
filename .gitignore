@@ -1,5 +1,5 @@
 # Rust
-/target
+/target/
 **/*.rs.bk
 *.pdb
 Cargo.lock
@@ -10,22 +10,10 @@ Cargo.lock
 *.swp
 *.swo
 *~
-.DS_Store
 
-# ctx runtime
-.ctx/
-*.db
-*.db-shm
-*.db-wal
+# OS
+.DS_Store
+Thumbs.db
 
 # Testing
-/tmp/
-/test-output/
-
-# Documentation
-/docs/_build/
-
-# Environment
-.env
-.env.*
-!.env.example
+/tests/fixtures/temp/
