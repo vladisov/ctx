@@ -5,6 +5,10 @@ use clap::{Parser, Subcommand};
 #[command(about = "Context management for LLMs", long_about = None)]
 #[command(version)]
 pub struct Cli {
+    /// Override data directory (for testing)
+    #[arg(long, env = "CTX_DATA_DIR", global = true)]
+    pub data_dir: Option<std::path::PathBuf>,
+
     #[command(subcommand)]
     pub command: Commands,
 }

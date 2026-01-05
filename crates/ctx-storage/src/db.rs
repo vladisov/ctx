@@ -22,6 +22,12 @@ impl Storage {
             data_dir.join("state.db")
         });
 
+        // Ensure parent directory exists (important for custom paths)
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| Error::Database(format!("Failed to create data directory: {}", e)))?;
+        }
+
         let options = SqliteConnectOptions::from_str(&format!("sqlite://{}", path.display()))
             .map_err(|e| Error::Database(e.to_string()))?
             .create_if_missing(true);
@@ -443,5 +449,222 @@ impl Storage {
             created_at: time::OffsetDateTime::from_unix_timestamp(created_at)
                 .map_err(|e| Error::Other(e.into()))?,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ctx_core::{Artifact, ArtifactType, Pack, RenderPolicy, Snapshot};
+
+    async fn create_test_storage() -> Storage {
+        let test_dir = std::env::temp_dir().join(format!("ctx-storage-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&test_dir).unwrap();
+        let db_path = test_dir.join("test.db");
+        Storage::new(Some(db_path)).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_pack_crud() {
+        let storage = create_test_storage().await;
+
+        // Create pack
+        let pack = Pack::new("test-pack".to_string(), RenderPolicy::default());
+        storage.create_pack(&pack).await.unwrap();
+
+        // Get pack by name
+        let retrieved = storage.get_pack_by_name("test-pack").await.unwrap();
+        assert_eq!(retrieved.id, pack.id);
+        assert_eq!(retrieved.name, "test-pack");
+
+        // Get pack by ID
+        let retrieved_by_id = storage.get_pack_by_id(&pack.id).await.unwrap();
+        assert_eq!(retrieved_by_id.name, "test-pack");
+
+        // List packs
+        let packs = storage.list_packs().await.unwrap();
+        assert_eq!(packs.len(), 1);
+        assert_eq!(packs[0].name, "test-pack");
+    }
+
+    #[tokio::test]
+    async fn test_pack_already_exists() {
+        let storage = create_test_storage().await;
+
+        let pack = Pack::new("duplicate-pack".to_string(), RenderPolicy::default());
+        storage.create_pack(&pack).await.unwrap();
+
+        // Try to create again with same name
+        let pack2 = Pack::new("duplicate-pack".to_string(), RenderPolicy::default());
+        let result = storage.create_pack(&pack2).await;
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), Error::PackAlreadyExists(_)));
+    }
+
+    #[tokio::test]
+    async fn test_artifact_with_content() {
+        let storage = create_test_storage().await;
+
+        // Create artifact
+        let artifact = Artifact::new(
+            ArtifactType::Text { content: "test content".to_string() },
+            "text:test".to_string(),
+        );
+        let content = "Hello, world!";
+
+        // Store with content
+        let content_hash = storage.create_artifact_with_content(&artifact, content).await.unwrap();
+        assert!(!content_hash.is_empty());
+
+        // Retrieve artifact
+        let retrieved = storage.get_artifact(&artifact.id).await.unwrap();
+        assert_eq!(retrieved.id, artifact.id);
+        assert_eq!(retrieved.content_hash, Some(content_hash.clone()));
+
+        // Load content
+        let loaded_content = storage.load_artifact_content(&retrieved).await.unwrap();
+        assert_eq!(loaded_content, content);
+    }
+
+    #[tokio::test]
+    async fn test_pack_artifact_association() {
+        let storage = create_test_storage().await;
+
+        // Create pack
+        let pack = Pack::new("test-pack".to_string(), RenderPolicy::default());
+        storage.create_pack(&pack).await.unwrap();
+
+        // Create artifacts
+        let artifact1 = Artifact::new(
+            ArtifactType::Text { content: "content1".to_string() },
+            "text:1".to_string(),
+        );
+        let artifact2 = Artifact::new(
+            ArtifactType::Text { content: "content2".to_string() },
+            "text:2".to_string(),
+        );
+
+        storage.create_artifact(&artifact1).await.unwrap();
+        storage.create_artifact(&artifact2).await.unwrap();
+
+        // Add to pack with different priorities
+        storage.add_artifact_to_pack(&pack.id, &artifact1.id, 10).await.unwrap();
+        storage.add_artifact_to_pack(&pack.id, &artifact2.id, 5).await.unwrap();
+
+        // Get pack artifacts (should be sorted by priority DESC)
+        let items = storage.get_pack_artifacts(&pack.id).await.unwrap();
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].artifact.id, artifact1.id); // priority 10 first
+        assert_eq!(items[1].artifact.id, artifact2.id); // priority 5 second
+
+        // Remove artifact
+        storage.remove_artifact_from_pack(&pack.id, &artifact1.id).await.unwrap();
+        let items = storage.get_pack_artifacts(&pack.id).await.unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].artifact.id, artifact2.id);
+    }
+
+    #[tokio::test]
+    async fn test_add_artifact_with_content_transactional() {
+        let storage = create_test_storage().await;
+
+        // Create pack
+        let pack = Pack::new("test-pack".to_string(), RenderPolicy::default());
+        storage.create_pack(&pack).await.unwrap();
+
+        // Add artifact with content (atomic operation)
+        let artifact = Artifact::new(
+            ArtifactType::File { path: "/test/file.txt".to_string() },
+            "file:/test/file.txt".to_string(),
+        );
+        let content = "File content here";
+
+        let content_hash = storage
+            .add_artifact_to_pack_with_content(&pack.id, &artifact, content, 0)
+            .await
+            .unwrap();
+
+        // Verify artifact was created
+        let retrieved = storage.get_artifact(&artifact.id).await.unwrap();
+        assert_eq!(retrieved.content_hash, Some(content_hash));
+
+        // Verify it's in the pack
+        let items = storage.get_pack_artifacts(&pack.id).await.unwrap();
+        assert_eq!(items.len(), 1);
+
+        // Verify content can be loaded
+        let loaded = storage.load_artifact_content(&retrieved).await.unwrap();
+        assert_eq!(loaded, content);
+    }
+
+    #[tokio::test]
+    async fn test_snapshot_operations() {
+        let storage = create_test_storage().await;
+
+        // Create snapshot
+        let snapshot = Snapshot::new(
+            "render-hash-123".to_string(),
+            "payload-hash-456".to_string(),
+            Some("v1.0".to_string()),
+        );
+        storage.create_snapshot(&snapshot).await.unwrap();
+
+        // Retrieve snapshot
+        let retrieved = storage.get_snapshot(&snapshot.id).await.unwrap();
+        assert_eq!(retrieved.id, snapshot.id);
+        assert_eq!(retrieved.label, Some("v1.0".to_string()));
+        assert_eq!(retrieved.render_hash, "render-hash-123");
+        assert_eq!(retrieved.payload_hash, "payload-hash-456");
+    }
+
+    #[tokio::test]
+    async fn test_snapshot_not_found() {
+        let storage = create_test_storage().await;
+
+        let result = storage.get_snapshot("nonexistent-id").await;
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), Error::SnapshotNotFound(_)));
+    }
+
+    #[tokio::test]
+    async fn test_multiple_packs_ordering() {
+        let storage = create_test_storage().await;
+
+        // Create multiple packs
+        let pack_a = Pack::new("aaa-pack".to_string(), RenderPolicy::default());
+        let pack_b = Pack::new("zzz-pack".to_string(), RenderPolicy::default());
+        let pack_c = Pack::new("mmm-pack".to_string(), RenderPolicy::default());
+
+        storage.create_pack(&pack_b).await.unwrap();
+        storage.create_pack(&pack_a).await.unwrap();
+        storage.create_pack(&pack_c).await.unwrap();
+
+        // List should be alphabetically sorted
+        let packs = storage.list_packs().await.unwrap();
+        assert_eq!(packs.len(), 3);
+        assert_eq!(packs[0].name, "aaa-pack");
+        assert_eq!(packs[1].name, "mmm-pack");
+        assert_eq!(packs[2].name, "zzz-pack");
+    }
+
+    #[tokio::test]
+    async fn test_migrations_idempotent() {
+        let test_dir = std::env::temp_dir().join(format!("ctx-storage-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&test_dir).unwrap();
+        let db_path = test_dir.join("test.db");
+
+        // Create storage (runs migrations)
+        let storage1 = Storage::new(Some(db_path.clone())).await.unwrap();
+        drop(storage1);
+
+        // Create again with same DB (should not fail)
+        let storage2 = Storage::new(Some(db_path.clone())).await.unwrap();
+
+        // Verify DB is functional
+        let pack = Pack::new("test-pack".to_string(), RenderPolicy::default());
+        storage2.create_pack(&pack).await.unwrap();
+
+        let packs = storage2.list_packs().await.unwrap();
+        assert_eq!(packs.len(), 1);
     }
 }

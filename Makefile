@@ -1,72 +1,46 @@
-.PHONY: build test clean install check fmt clippy run help
+# Makefile for ctx
 
-# Default target
+.PHONY: help build release test test-unit test-integration clean install fmt lint
+
 help:
-	@echo "ctx - Makefile targets:"
-	@echo "  build       - Build debug binary"
-	@echo "  release     - Build optimized release binary"
-	@echo "  test        - Run all tests"
-	@echo "  check       - Quick compile check (no binary)"
-	@echo "  fmt         - Format all code"
-	@echo "  clippy      - Run clippy lints"
-	@echo "  clean       - Remove build artifacts"
-	@echo "  install     - Install to ~/.cargo/bin"
-	@echo "  run         - Run with cargo (pass ARGS='...')"
-	@echo "  watch       - Auto-rebuild on changes"
-	@echo "  ci          - Run CI checks (test + clippy + fmt)"
+	@echo "ctx - Context management for LLMs"
+	@echo ""
+	@echo "Available targets:"
+	@echo "  build             - Build debug binary"
+	@echo "  release           - Build release binary (optimized)"
+	@echo "  test              - Run all tests"
+	@echo "  test-unit         - Run unit tests only"
+	@echo "  test-integration  - Run integration tests"
+	@echo "  clean             - Clean build artifacts"
+	@echo "  install           - Install ctx binary"
+	@echo "  fmt               - Format code"
+	@echo "  lint              - Run clippy"
 
 build:
 	cargo build
 
 release:
 	cargo build --release
-	@echo "Binary at: target/release/ctx"
 
-test:
+test: test-unit test-integration
+
+test-unit:
 	cargo test
 
-check:
-	cargo check --all-targets
-
-fmt:
-	cargo fmt --all
-
-clippy:
-	cargo clippy --all-targets -- -D warnings
+test-integration: release
+	@echo "Running integration tests..."
+	@CTX=./target/release/ctx ./tests/integration_test.sh
 
 clean:
 	cargo clean
-	rm -rf target/
 
 install:
 	cargo install --path crates/ctx-cli
 
-run:
-	cargo run -- $(ARGS)
+fmt:
+	cargo fmt
 
-watch:
-	cargo watch -x check -x test
+lint:
+	cargo clippy -- -D warnings
 
-# CI target - runs all checks
-ci: test clippy
-	cargo fmt --all -- --check
-
-# Development helpers
-dev-setup:
-	@echo "Installing development tools..."
-	cargo install cargo-watch
-	cargo install cargo-nextest
-	cargo install cargo-audit
-	rustup component add clippy rustfmt
-
-# Run with logging
-run-debug:
-	RUST_LOG=debug cargo run -- $(ARGS)
-
-# Quick check during development
-quick:
-	cargo check
-
-# Generate documentation
-docs:
-	cargo doc --no-deps --open
+.DEFAULT_GOAL := help

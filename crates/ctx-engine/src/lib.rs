@@ -135,3 +135,199 @@ impl Renderer {
          Ok(expanded)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ctx_core::{Artifact, ArtifactType, Pack, RenderPolicy, RenderRequest};
+    use ctx_storage::Storage;
+    use std::path::PathBuf;
+
+    async fn create_test_storage() -> Storage {
+        let test_dir = std::env::temp_dir().join(format!("ctx-engine-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&test_dir).unwrap();
+        let db_path = test_dir.join("test.db");
+        Storage::new(Some(db_path)).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_render_single_pack() {
+        let storage = create_test_storage().await;
+
+        // Create a pack with text artifacts
+        let pack = Pack::new("test-pack".to_string(), RenderPolicy::default());
+        storage.create_pack(&pack).await.unwrap();
+
+        let artifact = Artifact::new(
+            ArtifactType::Text { content: "Test content".to_string() },
+            "text:test".to_string(),
+        );
+        storage.add_artifact_to_pack_with_content(&pack.id, &artifact, "Test content", 0)
+            .await
+            .unwrap();
+
+        // Render the pack
+        let renderer = Renderer::new(storage);
+        let result = renderer.render_pack(&pack.id, None).await.unwrap();
+
+        assert!(result.payload.is_some());
+        assert!(result.payload.unwrap().contains("Test content"));
+        assert!(result.token_estimate > 0);
+    }
+
+    #[tokio::test]
+    async fn test_render_empty_pack() {
+        let storage = create_test_storage().await;
+
+        // Create an empty pack
+        let pack = Pack::new("empty-pack".to_string(), RenderPolicy::default());
+        storage.create_pack(&pack).await.unwrap();
+
+        // Render the empty pack
+        let renderer = Renderer::new(storage);
+        let result = renderer.render_pack(&pack.id, None).await.unwrap();
+
+        assert_eq!(result.included.len(), 0);
+        assert_eq!(result.token_estimate, 0);
+    }
+
+    #[tokio::test]
+    async fn test_render_multi_pack() {
+        let storage = create_test_storage().await;
+
+        // Create two packs
+        let pack1 = Pack::new("pack-1".to_string(), RenderPolicy::default());
+        let pack2 = Pack::new("pack-2".to_string(), RenderPolicy::default());
+        storage.create_pack(&pack1).await.unwrap();
+        storage.create_pack(&pack2).await.unwrap();
+
+        // Add artifacts to each pack
+        let artifact1 = Artifact::new(
+            ArtifactType::Text { content: "Content 1".to_string() },
+            "text:1".to_string(),
+        );
+        let artifact2 = Artifact::new(
+            ArtifactType::Text { content: "Content 2".to_string() },
+            "text:2".to_string(),
+        );
+
+        storage.add_artifact_to_pack_with_content(&pack1.id, &artifact1, "Content 1", 0)
+            .await
+            .unwrap();
+        storage.add_artifact_to_pack_with_content(&pack2.id, &artifact2, "Content 2", 0)
+            .await
+            .unwrap();
+
+        // Render both packs
+        let renderer = Renderer::new(storage);
+        let request = RenderRequest {
+            pack_ids: vec![pack1.id.clone(), pack2.id.clone()],
+        };
+        let result = renderer.render_request(request).await.unwrap();
+
+        assert!(result.payload.is_some());
+        let payload = result.payload.unwrap();
+        assert!(payload.contains("Content 1"));
+        assert!(payload.contains("Content 2"));
+        assert_eq!(result.included.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_budget_enforcement() {
+        let storage = create_test_storage().await;
+
+        // Create a pack with small budget
+        let mut policy = RenderPolicy::default();
+        policy.budget_tokens = 10; // Very small budget
+
+        let pack = Pack::new("budget-pack".to_string(), policy);
+        storage.create_pack(&pack).await.unwrap();
+
+        // Add a large text artifact
+        let artifact = Artifact::new(
+            ArtifactType::Text {
+                content: "This is a very long piece of content that will exceed the token budget".to_string()
+            },
+            "text:long".to_string(),
+        );
+        storage.add_artifact_to_pack_with_content(
+            &pack.id,
+            &artifact,
+            "This is a very long piece of content that will exceed the token budget",
+            0
+        ).await.unwrap();
+
+        // Render - should enforce budget
+        let renderer = Renderer::new(storage);
+        let result = renderer.render_pack(&pack.id, None).await.unwrap();
+
+        // Should have excluded items due to budget
+        assert!(result.excluded.len() > 0 || result.token_estimate <= 10);
+    }
+
+    #[tokio::test]
+    async fn test_redaction_integration() {
+        let storage = create_test_storage().await;
+
+        // Create pack with content containing secrets
+        let pack = Pack::new("secret-pack".to_string(), RenderPolicy::default());
+        storage.create_pack(&pack).await.unwrap();
+
+        let artifact = Artifact::new(
+            ArtifactType::Text {
+                content: "My AWS key is AKIAIOSFODNN7EXAMPLE".to_string()
+            },
+            "text:secret".to_string(),
+        );
+        storage.add_artifact_to_pack_with_content(
+            &pack.id,
+            &artifact,
+            "My AWS key is AKIAIOSFODNN7EXAMPLE",
+            0
+        ).await.unwrap();
+
+        // Render - should redact secrets
+        let renderer = Renderer::new(storage);
+        let result = renderer.render_pack(&pack.id, None).await.unwrap();
+
+        assert!(result.redactions.len() > 0);
+        assert!(result.payload.is_some());
+        let payload = result.payload.unwrap();
+        assert!(payload.contains("[REDACTED:AWS_ACCESS_KEY]"));
+        assert!(!payload.contains("AKIAIOSFODNN7EXAMPLE"));
+    }
+
+    #[tokio::test]
+    async fn test_pack_not_found() {
+        let storage = create_test_storage().await;
+        let renderer = Renderer::new(storage);
+
+        let result = renderer.render_pack("nonexistent-pack", None).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_deterministic_hash() {
+        let storage = create_test_storage().await;
+
+        // Create pack with artifact
+        let pack = Pack::new("deterministic-pack".to_string(), RenderPolicy::default());
+        storage.create_pack(&pack).await.unwrap();
+
+        let artifact = Artifact::new(
+            ArtifactType::Text { content: "Deterministic content".to_string() },
+            "text:det".to_string(),
+        );
+        storage.add_artifact_to_pack_with_content(&pack.id, &artifact, "Deterministic content", 0)
+            .await
+            .unwrap();
+
+        // Render twice
+        let renderer = Renderer::new(storage);
+        let result1 = renderer.render_pack(&pack.id, None).await.unwrap();
+        let result2 = renderer.render_pack(&pack.id, None).await.unwrap();
+
+        // Hashes should be the same
+        assert_eq!(result1.render_hash, result2.render_hash);
+    }
+}

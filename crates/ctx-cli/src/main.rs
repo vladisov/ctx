@@ -21,8 +21,9 @@ async fn main() -> Result<()> {
     // Load config (creates default if not found)
     let config = Config::load()?;
 
-    // Initialize storage once (creates connection pool and runs migrations)
-    let storage = Storage::new(None).await?;
+    // Initialize storage (use custom data dir if provided)
+    let db_path = cli.data_dir.as_ref().map(|dir| dir.join("state.db"));
+    let storage = Storage::new(db_path).await?;
 
     match cli.command {
         cli::Commands::Pack(pack_cmd) => commands::pack::handle(pack_cmd, &storage, &config).await,
