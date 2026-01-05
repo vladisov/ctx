@@ -4,10 +4,6 @@
 
 `ctx` is a developer tool that makes LLM workflows repeatable and manageable by treating context as a first-class object.
 
-## Status
-
-✅ **MVP Complete (M1-M4)** - Production-ready context management for LLMs
-
 ## What is ctx?
 
 `ctx` solves a critical problem in LLM-assisted development: **context reproducibility**. When working with AI coding agents, you need to:
@@ -280,16 +276,6 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed architecture and implement
 - Denylist for sensitive files
 - Git diff handler
 - Comprehensive tests
-
-## Non-Goals (MVP)
-
-- ❌ Code intelligence / RAG / indexing
-- ❌ File editing / patch application
-- ❌ Built-in model execution
-- ❌ Web UI
-- ❌ Remote storage / multi-user
-
-These may come in future phases.
 
 ## Contributing
 

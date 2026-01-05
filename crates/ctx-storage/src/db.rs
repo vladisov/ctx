@@ -4,8 +4,8 @@ use sqlx::Row;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use crate::models::PackItem;
 use crate::blob::BlobStore;
+use crate::models::PackItem;
 
 #[derive(Clone)]
 pub struct Storage {
@@ -52,17 +52,18 @@ impl Storage {
             "CREATE TABLE IF NOT EXISTS _migrations (
                 version INTEGER PRIMARY KEY,
                 applied_at INTEGER NOT NULL
-            )"
+            )",
         )
         .execute(&self.pool)
         .await
         .map_err(|e| Error::Database(format!("Failed to create migrations table: {}", e)))?;
 
         // Check if migration 1 has been applied
-        let applied: Option<i64> = sqlx::query_scalar("SELECT version FROM _migrations WHERE version = 1")
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(|e| Error::Database(format!("Failed to check migration status: {}", e)))?;
+        let applied: Option<i64> =
+            sqlx::query_scalar("SELECT version FROM _migrations WHERE version = 1")
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(|e| Error::Database(format!("Failed to check migration status: {}", e)))?;
 
         if applied.is_none() {
             // Run migration 1
@@ -78,7 +79,9 @@ impl Storage {
                 .bind(time::OffsetDateTime::now_utc().unix_timestamp())
                 .execute(&self.pool)
                 .await
-                .map_err(|e| Error::Database(format!("Failed to mark migration as applied: {}", e)))?;
+                .map_err(|e| {
+                    Error::Database(format!("Failed to mark migration as applied: {}", e))
+                })?;
         }
 
         Ok(())
@@ -163,15 +166,17 @@ impl Storage {
         .await
         .map_err(|e| Error::Database(format!("Failed to list packs: {}", e)))?;
 
-        rows.into_iter()
-            .map(|row| self.row_to_pack(row))
-            .collect()
+        rows.into_iter().map(|row| self.row_to_pack(row)).collect()
     }
 
     // Artifact operations
 
     /// Create artifact and store its content in blob storage
-    pub async fn create_artifact_with_content(&self, artifact: &Artifact, content: &str) -> Result<String> {
+    pub async fn create_artifact_with_content(
+        &self,
+        artifact: &Artifact,
+        content: &str,
+    ) -> Result<String> {
         // Store content in blob storage
         let content_hash = self.blob_store.store(content.as_bytes()).await?;
 
@@ -208,7 +213,9 @@ impl Storage {
 
     /// Load artifact content from blob storage
     pub async fn load_artifact_content(&self, artifact: &Artifact) -> Result<String> {
-        let content_hash = artifact.content_hash.as_ref()
+        let content_hash = artifact
+            .content_hash
+            .as_ref()
             .ok_or_else(|| Error::Other(anyhow::anyhow!("Artifact has no content hash")))?;
 
         let content_bytes = self.blob_store.retrieve(content_hash).await?;
@@ -241,8 +248,9 @@ impl Storage {
         Ok(Pack {
             id,
             name,
-            policies: serde_json::from_str(&policies_json)
-                .map_err(|e| Error::Other(anyhow::anyhow!("Failed to parse policies JSON: {}", e)))?,
+            policies: serde_json::from_str(&policies_json).map_err(|e| {
+                Error::Other(anyhow::anyhow!("Failed to parse policies JSON: {}", e))
+            })?,
             created_at: time::OffsetDateTime::from_unix_timestamp(created_at)
                 .map_err(|e| Error::Other(e.into()))?,
             updated_at: time::OffsetDateTime::from_unix_timestamp(updated_at)
@@ -261,12 +269,14 @@ impl Storage {
 
         Ok(Artifact {
             id,
-            artifact_type: serde_json::from_str(&type_json)
-                .map_err(|e| Error::Other(anyhow::anyhow!("Failed to parse artifact type JSON: {}", e)))?,
+            artifact_type: serde_json::from_str(&type_json).map_err(|e| {
+                Error::Other(anyhow::anyhow!("Failed to parse artifact type JSON: {}", e))
+            })?,
             source_uri,
             content_hash,
-            metadata: serde_json::from_str(&meta_json)
-                .map_err(|e| Error::Other(anyhow::anyhow!("Failed to parse metadata JSON: {}", e)))?,
+            metadata: serde_json::from_str(&meta_json).map_err(|e| {
+                Error::Other(anyhow::anyhow!("Failed to parse metadata JSON: {}", e))
+            })?,
             token_estimate: token_est as usize,
             created_at: time::OffsetDateTime::from_unix_timestamp(created_at)
                 .map_err(|e| Error::Other(e.into()))?,
@@ -283,7 +293,10 @@ impl Storage {
         content: &str,
         priority: i64,
     ) -> Result<String> {
-        let mut tx = self.pool.begin().await
+        let mut tx = self
+            .pool
+            .begin()
+            .await
             .map_err(|e| Error::Database(format!("Failed to begin transaction: {}", e)))?;
 
         // Store content in blob storage
@@ -324,10 +337,16 @@ impl Storage {
         .bind(added_at.unix_timestamp())
         .execute(&mut *tx)
         .await
-        .map_err(|e| Error::Database(format!("Failed to add artifact to pack in transaction: {}", e)))?;
+        .map_err(|e| {
+            Error::Database(format!(
+                "Failed to add artifact to pack in transaction: {}",
+                e
+            ))
+        })?;
 
         // Commit transaction
-        tx.commit().await
+        tx.commit()
+            .await
             .map_err(|e| Error::Database(format!("Failed to commit transaction: {}", e)))?;
 
         Ok(content_hash)
@@ -450,6 +469,62 @@ impl Storage {
                 .map_err(|e| Error::Other(e.into()))?,
         })
     }
+
+    /// Delete a pack and all its associations (artifacts remain for deduplication)
+    pub async fn delete_pack(&self, pack_id: &str) -> Result<()> {
+        let result = sqlx::query("DELETE FROM packs WHERE pack_id = ?")
+            .bind(pack_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| Error::Database(e.to_string()))?;
+
+        if result.rows_affected() == 0 {
+            return Err(Error::PackNotFound(pack_id.to_string()));
+        }
+
+        Ok(())
+    }
+
+    /// List all snapshots, optionally filtered by render_hash
+    pub async fn list_snapshots(&self, render_hash: Option<&str>) -> Result<Vec<Snapshot>> {
+        let rows = if let Some(hash) = render_hash {
+            sqlx::query(
+                "SELECT snapshot_id, label, render_hash, payload_hash, created_at
+                 FROM snapshots WHERE render_hash = ? ORDER BY created_at DESC",
+            )
+            .bind(hash)
+            .fetch_all(&self.pool)
+            .await
+        } else {
+            sqlx::query(
+                "SELECT snapshot_id, label, render_hash, payload_hash, created_at
+                 FROM snapshots ORDER BY created_at DESC",
+            )
+            .fetch_all(&self.pool)
+            .await
+        }
+        .map_err(|e| Error::Database(e.to_string()))?;
+
+        let mut snapshots = Vec::new();
+        for row in rows {
+            let id: String = row.get("snapshot_id");
+            let label: Option<String> = row.get("label");
+            let render_hash: String = row.get("render_hash");
+            let payload_hash: String = row.get("payload_hash");
+            let created_at: i64 = row.get("created_at");
+
+            snapshots.push(Snapshot {
+                id,
+                label,
+                render_hash,
+                payload_hash,
+                created_at: time::OffsetDateTime::from_unix_timestamp(created_at)
+                    .map_err(|e| Error::Other(e.into()))?,
+            });
+        }
+
+        Ok(snapshots)
+    }
 }
 
 #[cfg(test)]
@@ -458,7 +533,8 @@ mod tests {
     use ctx_core::{Artifact, ArtifactType, Pack, RenderPolicy, Snapshot};
 
     async fn create_test_storage() -> Storage {
-        let test_dir = std::env::temp_dir().join(format!("ctx-storage-test-{}", uuid::Uuid::new_v4()));
+        let test_dir =
+            std::env::temp_dir().join(format!("ctx-storage-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&test_dir).unwrap();
         let db_path = test_dir.join("test.db");
         Storage::new(Some(db_path)).await.unwrap()
@@ -507,13 +583,18 @@ mod tests {
 
         // Create artifact
         let artifact = Artifact::new(
-            ArtifactType::Text { content: "test content".to_string() },
+            ArtifactType::Text {
+                content: "test content".to_string(),
+            },
             "text:test".to_string(),
         );
         let content = "Hello, world!";
 
         // Store with content
-        let content_hash = storage.create_artifact_with_content(&artifact, content).await.unwrap();
+        let content_hash = storage
+            .create_artifact_with_content(&artifact, content)
+            .await
+            .unwrap();
         assert!(!content_hash.is_empty());
 
         // Retrieve artifact
@@ -536,11 +617,15 @@ mod tests {
 
         // Create artifacts
         let artifact1 = Artifact::new(
-            ArtifactType::Text { content: "content1".to_string() },
+            ArtifactType::Text {
+                content: "content1".to_string(),
+            },
             "text:1".to_string(),
         );
         let artifact2 = Artifact::new(
-            ArtifactType::Text { content: "content2".to_string() },
+            ArtifactType::Text {
+                content: "content2".to_string(),
+            },
             "text:2".to_string(),
         );
 
@@ -548,8 +633,14 @@ mod tests {
         storage.create_artifact(&artifact2).await.unwrap();
 
         // Add to pack with different priorities
-        storage.add_artifact_to_pack(&pack.id, &artifact1.id, 10).await.unwrap();
-        storage.add_artifact_to_pack(&pack.id, &artifact2.id, 5).await.unwrap();
+        storage
+            .add_artifact_to_pack(&pack.id, &artifact1.id, 10)
+            .await
+            .unwrap();
+        storage
+            .add_artifact_to_pack(&pack.id, &artifact2.id, 5)
+            .await
+            .unwrap();
 
         // Get pack artifacts (should be sorted by priority DESC)
         let items = storage.get_pack_artifacts(&pack.id).await.unwrap();
@@ -558,7 +649,10 @@ mod tests {
         assert_eq!(items[1].artifact.id, artifact2.id); // priority 5 second
 
         // Remove artifact
-        storage.remove_artifact_from_pack(&pack.id, &artifact1.id).await.unwrap();
+        storage
+            .remove_artifact_from_pack(&pack.id, &artifact1.id)
+            .await
+            .unwrap();
         let items = storage.get_pack_artifacts(&pack.id).await.unwrap();
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].artifact.id, artifact2.id);
@@ -574,7 +668,9 @@ mod tests {
 
         // Add artifact with content (atomic operation)
         let artifact = Artifact::new(
-            ArtifactType::File { path: "/test/file.txt".to_string() },
+            ArtifactType::File {
+                path: "/test/file.txt".to_string(),
+            },
             "file:/test/file.txt".to_string(),
         );
         let content = "File content here";
@@ -649,7 +745,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_migrations_idempotent() {
-        let test_dir = std::env::temp_dir().join(format!("ctx-storage-test-{}", uuid::Uuid::new_v4()));
+        let test_dir =
+            std::env::temp_dir().join(format!("ctx-storage-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&test_dir).unwrap();
         let db_path = test_dir.join("test.db");
 

@@ -44,10 +44,7 @@ impl BlobStore {
         let path = self.blob_path(hash);
 
         if !path.exists() {
-            return Err(Error::Other(anyhow::anyhow!(
-                "Blob not found: {}",
-                hash
-            )));
+            return Err(Error::Other(anyhow::anyhow!("Blob not found: {}", hash)));
         }
 
         let content = fs::read(&path).await?;

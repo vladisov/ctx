@@ -1,9 +1,9 @@
 use anyhow::Result;
 use ctx_config::Config;
 use ctx_core::{OrderingStrategy, Pack, RenderPolicy, Snapshot};
+use ctx_engine::Renderer;
 use ctx_sources::{Denylist, SourceHandlerRegistry, SourceOptions};
 use ctx_storage::Storage;
-use ctx_engine::Renderer;
 
 use crate::cli::PackCommands;
 
@@ -27,7 +27,8 @@ pub async fn handle(cmd: PackCommands, storage: &Storage, config: &Config) -> Re
             recursive,
         } => {
             add(
-                storage, &denylist, pack, source, priority, start, end, max_files, exclude, recursive,
+                storage, &denylist, pack, source, priority, start, end, max_files, exclude,
+                recursive,
             )
             .await
         }
@@ -39,6 +40,8 @@ pub async fn handle(cmd: PackCommands, storage: &Storage, config: &Config) -> Re
             show_payload,
         } => preview(storage, pack, tokens, redactions, show_payload).await,
         PackCommands::Snapshot { pack, label } => snapshot(storage, pack, label).await,
+        PackCommands::Delete { pack, force } => delete(storage, pack, force).await,
+        PackCommands::Snapshots { pack } => snapshots(storage, pack).await,
     }
 }
 
@@ -92,7 +95,10 @@ async fn show(storage: &Storage, pack_name: String) -> Result<()> {
     } else {
         println!("\nArtifacts ({}):", artifacts.len());
         for item in artifacts {
-            println!("  [{}] {} (priority: {})", item.artifact.id, item.artifact.source_uri, item.priority);
+            println!(
+                "  [{}] {} (priority: {})",
+                item.artifact.id, item.artifact.source_uri, item.priority
+            );
             let type_json = serde_json::to_string_pretty(&item.artifact.artifact_type)?;
             println!("    Type: {}", type_json);
         }
@@ -130,12 +136,17 @@ async fn add(
     let artifact = registry.parse(&source, options).await?;
 
     // Check denylist for file artifacts
-    if let ctx_core::ArtifactType::File { path } | ctx_core::ArtifactType::FileRange { path, .. } = &artifact.artifact_type {
+    if let ctx_core::ArtifactType::File { path } | ctx_core::ArtifactType::FileRange { path, .. } =
+        &artifact.artifact_type
+    {
         if denylist.is_denied(path) {
-            let pattern = denylist.matching_pattern(path).unwrap_or_else(|| "unknown".to_string());
+            let pattern = denylist
+                .matching_pattern(path)
+                .unwrap_or_else(|| "unknown".to_string());
             anyhow::bail!(
                 "File '{}' is denied by pattern '{}'. This file may contain sensitive information.",
-                path, pattern
+                path,
+                pattern
             );
         }
     }
@@ -143,13 +154,16 @@ async fn add(
     // Check if artifact is a collection
     let is_collection = matches!(
         artifact.artifact_type,
-        ctx_core::ArtifactType::CollectionMdDir { .. } | ctx_core::ArtifactType::CollectionGlob { .. }
+        ctx_core::ArtifactType::CollectionMdDir { .. }
+            | ctx_core::ArtifactType::CollectionGlob { .. }
     );
 
     if is_collection {
         // Collections don't have content to load immediately
         storage.create_artifact(&artifact).await?;
-        storage.add_artifact_to_pack(&pack.id, &artifact.id, priority).await?;
+        storage
+            .add_artifact_to_pack(&pack.id, &artifact.id, priority)
+            .await?;
     } else {
         // Load artifact content
         let content = registry.load(&artifact).await?;
@@ -177,7 +191,10 @@ async fn remove(storage: &Storage, pack_name: String, artifact_id: String) -> Re
         .remove_artifact_from_pack(&pack.id, &artifact_id)
         .await?;
 
-    println!("✓ Removed artifact {} from pack '{}'", artifact_id, pack.name);
+    println!(
+        "✓ Removed artifact {} from pack '{}'",
+        artifact_id, pack.name
+    );
 
     Ok(())
 }
@@ -197,7 +214,10 @@ async fn preview(
     let result = renderer.render_pack(&pack.id, None).await?;
 
     println!("render_hash: {}", result.render_hash);
-    println!("token_estimate: {} / {}", result.token_estimate, result.budget_tokens);
+    println!(
+        "token_estimate: {} / {}",
+        result.token_estimate, result.budget_tokens
+    );
 
     if !result.excluded.is_empty() {
         println!("\nExcluded Artifacts ({}):", result.excluded.len());
@@ -209,15 +229,21 @@ async fn preview(
     if show_redactions && !result.redactions.is_empty() {
         println!("\nRedactions:");
         for summary in &result.redactions {
-            println!("  - Artifact {}: {} redactions ({:?})", summary.artifact_id, summary.count, summary.types);
+            println!(
+                "  - Artifact {}: {} redactions ({:?})",
+                summary.artifact_id, summary.count, summary.types
+            );
         }
     }
 
     if show_tokens {
-         println!("\nIncluded Artifacts:");
-         for included in &result.included {
-             println!("  - {} ({} tokens)", included.source_uri, included.token_estimate);
-         }
+        println!("\nIncluded Artifacts:");
+        for included in &result.included {
+            println!(
+                "  - {} ({} tokens)",
+                included.source_uri, included.token_estimate
+            );
+        }
     }
 
     if show_payload {
@@ -241,16 +267,66 @@ async fn snapshot(storage: &Storage, pack_name: String, label: Option<String>) -
     let payload = result.payload.unwrap_or_default();
     let payload_hash = blake3::hash(payload.as_bytes()).to_hex().to_string();
 
-    let snapshot = Snapshot::new(
-        result.render_hash.clone(),
-        payload_hash,
-        label,
-    );
+    let snapshot = Snapshot::new(result.render_hash.clone(), payload_hash, label);
 
     storage.create_snapshot(&snapshot).await?;
 
     println!("✓ Snapshot created: {}", snapshot.id);
     println!("  Render Hash: {}", snapshot.render_hash);
+
+    Ok(())
+}
+
+async fn delete(storage: &Storage, pack_name: String, force: bool) -> Result<()> {
+    let pack = storage.get_pack(&pack_name).await?;
+
+    if !force {
+        print!("Delete pack '{}' and all its artifacts? [y/N] ", pack.name);
+        std::io::Write::flush(&mut std::io::stdout())?;
+
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+
+        if !input.trim().eq_ignore_ascii_case("y") {
+            println!("Cancelled.");
+            return Ok(());
+        }
+    }
+
+    storage.delete_pack(&pack.id).await?;
+    println!("✓ Deleted pack: {}", pack.name);
+
+    Ok(())
+}
+
+async fn snapshots(storage: &Storage, pack_name: String) -> Result<()> {
+    let pack = storage.get_pack(&pack_name).await?;
+    let renderer = Renderer::new(storage.clone());
+
+    // Get current render hash to find matching snapshots
+    let result = renderer.render_pack(&pack.id, None).await?;
+    let current_hash = &result.render_hash;
+
+    let all_snapshots = storage.list_snapshots(Some(current_hash)).await?;
+
+    if all_snapshots.is_empty() {
+        println!(
+            "No snapshots for pack '{}' (current render_hash: {})",
+            pack.name,
+            &current_hash[..12]
+        );
+        return Ok(());
+    }
+
+    println!(
+        "Snapshots for pack '{}' ({} total):",
+        pack.name,
+        all_snapshots.len()
+    );
+    for snap in all_snapshots {
+        let label = snap.label.unwrap_or_else(|| "(no label)".to_string());
+        println!("  {} - {} ({})", &snap.id[..8], label, snap.created_at);
+    }
 
     Ok(())
 }

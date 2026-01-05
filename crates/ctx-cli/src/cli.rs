@@ -122,4 +122,20 @@ pub enum PackCommands {
         #[arg(long)]
         label: Option<String>,
     },
+
+    /// Delete a pack
+    Delete {
+        /// Pack name or ID
+        pack: String,
+
+        /// Skip confirmation prompt
+        #[arg(long)]
+        force: bool,
+    },
+
+    /// List snapshots for a pack
+    Snapshots {
+        /// Pack name or ID
+        pack: String,
+    },
 }

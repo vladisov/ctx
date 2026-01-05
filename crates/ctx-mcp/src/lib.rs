@@ -7,11 +7,11 @@ pub use server::McpServer;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use protocol::{JsonRpcRequest, JsonRpcResponse};
-    use tools::{call_tool, list_tools};
-    use ctx_storage::Storage;
     use ctx_core::{Artifact, ArtifactType, Pack, RenderPolicy};
+    use ctx_storage::Storage;
+    use protocol::JsonRpcResponse;
     use std::sync::Arc;
+    use tools::{call_tool, list_tools};
 
     async fn create_test_storage() -> Storage {
         let test_dir = std::env::temp_dir().join(format!("ctx-mcp-test-{}", uuid::Uuid::new_v4()));
@@ -22,10 +22,8 @@ mod tests {
 
     #[test]
     fn test_jsonrpc_response_success() {
-        let response = JsonRpcResponse::success(
-            serde_json::json!(1),
-            serde_json::json!({"status": "ok"}),
-        );
+        let response =
+            JsonRpcResponse::success(serde_json::json!(1), serde_json::json!({"status": "ok"}));
 
         assert_eq!(response.jsonrpc, "2.0");
         assert_eq!(response.id, serde_json::json!(1));
@@ -35,11 +33,7 @@ mod tests {
 
     #[test]
     fn test_jsonrpc_response_error() {
-        let response = JsonRpcResponse::error(
-            serde_json::json!(1),
-            -32601,
-            "Method not found",
-        );
+        let response = JsonRpcResponse::error(serde_json::json!(1), -32601, "Method not found");
 
         assert_eq!(response.jsonrpc, "2.0");
         assert_eq!(response.id, serde_json::json!(1));
@@ -60,9 +54,7 @@ mod tests {
         assert!(tools.len() > 0);
 
         // Check for expected tool names
-        let tool_names: Vec<&str> = tools.iter()
-            .filter_map(|t| t["name"].as_str())
-            .collect();
+        let tool_names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
         assert!(tool_names.contains(&"ctx_packs_list"));
         assert!(tool_names.contains(&"ctx_packs_get"));
         assert!(tool_names.contains(&"ctx_packs_preview"));
@@ -159,10 +151,13 @@ mod tests {
         storage.create_pack(&pack).await.unwrap();
 
         let artifact = Artifact::new(
-            ArtifactType::Text { content: "Test content".to_string() },
+            ArtifactType::Text {
+                content: "Test content".to_string(),
+            },
             "text:test".to_string(),
         );
-        storage.add_artifact_to_pack_with_content(&pack.id, &artifact, "Test content", 0)
+        storage
+            .add_artifact_to_pack_with_content(&pack.id, &artifact, "Test content", 0)
             .await
             .unwrap();
 

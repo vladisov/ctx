@@ -80,28 +80,23 @@ impl RenderEngine {
     /// CRITICAL: This must be deterministic - same inputs produce same output
     pub fn render(
         &self,
-        mut artifacts: Vec<ProcessedArtifact>,
+        artifacts: Vec<ProcessedArtifact>,
         budget_tokens: usize,
         redaction_info: Vec<ctx_security::RedactionInfo>,
     ) -> Result<RenderResult> {
-        // STEP 1: Sort artifacts deterministically (by artifact ID for stable order)
-        // Note: Caller should pre-sort by priority DESC, added_at ASC
-        // This is just a safety check for determinism
-        artifacts.sort_by(|a, b| a.artifact.id.cmp(&b.artifact.id));
-
-        // STEP 2: Apply budget - keep artifacts until we hit budget
+        // Apply budget - keep artifacts until we hit budget (caller pre-sorts by priority)
         let (included, excluded) = self.apply_budget(artifacts, budget_tokens);
 
-        // STEP 3: Concatenate payload in order
+        // Concatenate payload in order
         let payload = self.concatenate_payload(&included);
 
-        // STEP 4: Compute hashes for reproducibility
+        // Compute hashes for reproducibility
         let render_hash = self.compute_render_hash(&included);
 
-        // STEP 5: Collect redaction summaries
+        // Collect redaction summaries
         let redactions = self.summarize_redactions(redaction_info);
 
-        // STEP 6: Calculate totals
+        // Calculate totals
         let token_estimate: usize = included.iter().map(|a| a.token_count).sum();
 
         Ok(RenderResult {
@@ -146,10 +141,7 @@ impl RenderEngine {
 
         for artifact in artifacts {
             // Add header with source info
-            payload.push_str(&format!(
-                "\n--- {} ---\n",
-                artifact.artifact.source_uri
-            ));
+            payload.push_str(&format!("\n--- {} ---\n", artifact.artifact.source_uri));
 
             // Add content
             payload.push_str(&artifact.content);
@@ -184,7 +176,9 @@ impl RenderEngine {
             std::collections::HashMap::new();
 
         for info in redaction_info {
-            let entry = map.entry(info.artifact_id.clone()).or_insert((Vec::new(), 0));
+            let entry = map
+                .entry(info.artifact_id.clone())
+                .or_insert((Vec::new(), 0));
             entry.0.push(info.redaction_type);
             entry.1 += info.count;
         }

@@ -27,7 +27,11 @@ async fn main() -> Result<()> {
 
     match cli.command {
         cli::Commands::Pack(pack_cmd) => commands::pack::handle(pack_cmd, &storage, &config).await,
-        cli::Commands::Mcp { port, host, read_only } => {
+        cli::Commands::Mcp {
+            port,
+            host,
+            read_only,
+        } => {
             let port = port.unwrap_or(config.mcp.port);
             let host = host.unwrap_or(config.mcp.host);
             let read_only = read_only || config.mcp.read_only;

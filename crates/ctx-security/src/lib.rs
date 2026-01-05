@@ -56,7 +56,9 @@ impl Redactor {
             let count = matches.len();
 
             if count > 0 {
-                result = pattern.replace_all(&result, format!("[REDACTED:{}]", secret_type)).to_string();
+                result = pattern
+                    .replace_all(&result, format!("[REDACTED:{}]", secret_type))
+                    .to_string();
 
                 redactions.push(RedactionInfo {
                     artifact_id: artifact_id.to_string(),

@@ -1,12 +1,12 @@
 use anyhow::Result;
 use ctx_core::{
+    render::{ProcessedArtifact, RenderEngine, RenderResult},
     RenderPolicy,
-    render::{RenderEngine, ProcessedArtifact, RenderResult},
 };
-use ctx_storage::Storage;
-use ctx_sources::SourceHandlerRegistry;
-use ctx_tokens::TokenEstimator;
 use ctx_security::Redactor;
+use ctx_sources::SourceHandlerRegistry;
+use ctx_storage::Storage;
+use ctx_tokens::TokenEstimator;
 
 pub struct Renderer {
     storage: Storage,
@@ -40,34 +40,38 @@ impl Renderer {
         };
 
         for pack_id in req.pack_ids {
-             let result = self.render_pack(&pack_id, None).await?;
-             
-             // Merge logic
-             combined_result.budget_tokens += result.budget_tokens;
-             combined_result.token_estimate += result.token_estimate;
-             combined_result.included.extend(result.included);
-             combined_result.excluded.extend(result.excluded);
-             combined_result.redactions.extend(result.redactions);
-             
-             if let Some(payload) = result.payload {
-                 if let Some(ref mut existing) = combined_result.payload {
-                     if !existing.is_empty() {
-                         existing.push_str("\n\n");
-                     }
-                     existing.push_str(&payload);
-                 }
-             }
+            let result = self.render_pack(&pack_id, None).await?;
+
+            // Merge logic
+            combined_result.budget_tokens += result.budget_tokens;
+            combined_result.token_estimate += result.token_estimate;
+            combined_result.included.extend(result.included);
+            combined_result.excluded.extend(result.excluded);
+            combined_result.redactions.extend(result.redactions);
+
+            if let Some(payload) = result.payload {
+                if let Some(ref mut existing) = combined_result.payload {
+                    if !existing.is_empty() {
+                        existing.push_str("\n\n");
+                    }
+                    existing.push_str(&payload);
+                }
+            }
         }
-        
+
         // Re-calculate hash of combined payload
         if let Some(ref payload) = combined_result.payload {
-             combined_result.render_hash = blake3::hash(payload.as_bytes()).to_hex().to_string();
+            combined_result.render_hash = blake3::hash(payload.as_bytes()).to_hex().to_string();
         }
 
         Ok(combined_result)
     }
 
-    pub async fn render_pack(&self, pack_id: &str, policy_overrides: Option<RenderPolicy>) -> Result<RenderResult> {
+    pub async fn render_pack(
+        &self,
+        pack_id: &str,
+        policy_overrides: Option<RenderPolicy>,
+    ) -> Result<RenderResult> {
         // 1. Get Pack
         let pack = self.storage.get_pack(pack_id).await?;
         let policy = policy_overrides.unwrap_or(pack.policies);
@@ -80,7 +84,7 @@ impl Renderer {
         let mut redaction_infos = Vec::new();
 
         for item in pack_artifacts {
-             let artifacts = self.expand_artifact(&item.artifact).await?;
+            let artifacts = self.expand_artifact(&item.artifact).await?;
 
             for artifact in artifacts {
                 // Load content
@@ -103,36 +107,44 @@ impl Renderer {
         }
 
         // 4. Render
-        Ok(self.render_engine.render(
-            processed_artifacts,
-            policy.budget_tokens,
-            redaction_infos,
-        )?)
+        Ok(self
+            .render_engine
+            .render(processed_artifacts, policy.budget_tokens, redaction_infos)?)
     }
 
-    async fn expand_artifact(&self, artifact: &ctx_core::Artifact) -> Result<Vec<ctx_core::Artifact>> {
-         use ctx_core::ArtifactType;
+    async fn expand_artifact(
+        &self,
+        artifact: &ctx_core::Artifact,
+    ) -> Result<Vec<ctx_core::Artifact>> {
+        use ctx_core::ArtifactType;
 
-         let paths = match &artifact.artifact_type {
-             ArtifactType::CollectionMdDir { path, max_files, exclude, recursive } => {
+        let paths = match &artifact.artifact_type {
+            ArtifactType::CollectionMdDir {
+                path,
+                max_files,
+                exclude,
+                recursive,
+            } => {
                 let handler = ctx_sources::collection::CollectionHandler;
-                handler.expand_md_dir(path, *max_files, exclude, *recursive).await?
-             }
-             ArtifactType::CollectionGlob { pattern } => {
+                handler
+                    .expand_md_dir(path, *max_files, exclude, *recursive)
+                    .await?
+            }
+            ArtifactType::CollectionGlob { pattern } => {
                 let handler = ctx_sources::collection::CollectionHandler;
                 handler.expand_glob(pattern).await?
-             }
-             _ => return Ok(vec![artifact.clone()]),
-         };
+            }
+            _ => return Ok(vec![artifact.clone()]),
+        };
 
-         // Convert paths to artifacts
-         let mut expanded = Vec::new();
-         for p in paths {
-             let uri = format!("file:{}", p);
-             let item = self.source_registry.parse(&uri, Default::default()).await?;
-             expanded.push(item);
-         }
-         Ok(expanded)
+        // Convert paths to artifacts
+        let mut expanded = Vec::new();
+        for p in paths {
+            let uri = format!("file:{}", p);
+            let item = self.source_registry.parse(&uri, Default::default()).await?;
+            expanded.push(item);
+        }
+        Ok(expanded)
     }
 }
 
@@ -141,10 +153,10 @@ mod tests {
     use super::*;
     use ctx_core::{Artifact, ArtifactType, Pack, RenderPolicy, RenderRequest};
     use ctx_storage::Storage;
-    use std::path::PathBuf;
 
     async fn create_test_storage() -> Storage {
-        let test_dir = std::env::temp_dir().join(format!("ctx-engine-test-{}", uuid::Uuid::new_v4()));
+        let test_dir =
+            std::env::temp_dir().join(format!("ctx-engine-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&test_dir).unwrap();
         let db_path = test_dir.join("test.db");
         Storage::new(Some(db_path)).await.unwrap()
@@ -159,10 +171,13 @@ mod tests {
         storage.create_pack(&pack).await.unwrap();
 
         let artifact = Artifact::new(
-            ArtifactType::Text { content: "Test content".to_string() },
+            ArtifactType::Text {
+                content: "Test content".to_string(),
+            },
             "text:test".to_string(),
         );
-        storage.add_artifact_to_pack_with_content(&pack.id, &artifact, "Test content", 0)
+        storage
+            .add_artifact_to_pack_with_content(&pack.id, &artifact, "Test content", 0)
             .await
             .unwrap();
 
@@ -203,18 +218,24 @@ mod tests {
 
         // Add artifacts to each pack
         let artifact1 = Artifact::new(
-            ArtifactType::Text { content: "Content 1".to_string() },
+            ArtifactType::Text {
+                content: "Content 1".to_string(),
+            },
             "text:1".to_string(),
         );
         let artifact2 = Artifact::new(
-            ArtifactType::Text { content: "Content 2".to_string() },
+            ArtifactType::Text {
+                content: "Content 2".to_string(),
+            },
             "text:2".to_string(),
         );
 
-        storage.add_artifact_to_pack_with_content(&pack1.id, &artifact1, "Content 1", 0)
+        storage
+            .add_artifact_to_pack_with_content(&pack1.id, &artifact1, "Content 1", 0)
             .await
             .unwrap();
-        storage.add_artifact_to_pack_with_content(&pack2.id, &artifact2, "Content 2", 0)
+        storage
+            .add_artifact_to_pack_with_content(&pack2.id, &artifact2, "Content 2", 0)
             .await
             .unwrap();
 
@@ -246,16 +267,20 @@ mod tests {
         // Add a large text artifact
         let artifact = Artifact::new(
             ArtifactType::Text {
-                content: "This is a very long piece of content that will exceed the token budget".to_string()
+                content: "This is a very long piece of content that will exceed the token budget"
+                    .to_string(),
             },
             "text:long".to_string(),
         );
-        storage.add_artifact_to_pack_with_content(
-            &pack.id,
-            &artifact,
-            "This is a very long piece of content that will exceed the token budget",
-            0
-        ).await.unwrap();
+        storage
+            .add_artifact_to_pack_with_content(
+                &pack.id,
+                &artifact,
+                "This is a very long piece of content that will exceed the token budget",
+                0,
+            )
+            .await
+            .unwrap();
 
         // Render - should enforce budget
         let renderer = Renderer::new(storage);
@@ -275,16 +300,19 @@ mod tests {
 
         let artifact = Artifact::new(
             ArtifactType::Text {
-                content: "My AWS key is AKIAIOSFODNN7EXAMPLE".to_string()
+                content: "My AWS key is AKIAIOSFODNN7EXAMPLE".to_string(),
             },
             "text:secret".to_string(),
         );
-        storage.add_artifact_to_pack_with_content(
-            &pack.id,
-            &artifact,
-            "My AWS key is AKIAIOSFODNN7EXAMPLE",
-            0
-        ).await.unwrap();
+        storage
+            .add_artifact_to_pack_with_content(
+                &pack.id,
+                &artifact,
+                "My AWS key is AKIAIOSFODNN7EXAMPLE",
+                0,
+            )
+            .await
+            .unwrap();
 
         // Render - should redact secrets
         let renderer = Renderer::new(storage);
@@ -315,10 +343,13 @@ mod tests {
         storage.create_pack(&pack).await.unwrap();
 
         let artifact = Artifact::new(
-            ArtifactType::Text { content: "Deterministic content".to_string() },
+            ArtifactType::Text {
+                content: "Deterministic content".to_string(),
+            },
             "text:det".to_string(),
         );
-        storage.add_artifact_to_pack_with_content(&pack.id, &artifact, "Deterministic content", 0)
+        storage
+            .add_artifact_to_pack_with_content(&pack.id, &artifact, "Deterministic content", 0)
             .await
             .unwrap();
 

@@ -1,8 +1,4 @@
-use axum::{
-    extract::State,
-    routing::post,
-    Json, Router,
-};
+use axum::{extract::State, routing::post, Json, Router};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tracing::info;
@@ -32,7 +28,7 @@ impl McpServer {
         read_only: bool,
     ) -> anyhow::Result<()> {
         let renderer = Arc::new(Renderer::new((*db).clone()));
-        
+
         let server = Arc::new(Self {
             db,
             renderer,
@@ -65,12 +61,10 @@ async fn handle_jsonrpc(
             let tools = list_tools(state.server.read_only);
             Json(JsonRpcResponse::success(req.id, tools))
         }
-        "tools/call" => {
-            match call_tool(&state.server, &req.params).await {
-                Ok(result) => Json(JsonRpcResponse::success(req.id, result)),
-                Err(e) => Json(JsonRpcResponse::error(req.id, -32000, &e.to_string())),
-            }
-        }
+        "tools/call" => match call_tool(&state.server, &req.params).await {
+            Ok(result) => Json(JsonRpcResponse::success(req.id, result)),
+            Err(e) => Json(JsonRpcResponse::error(req.id, -32000, &e.to_string())),
+        },
         _ => Json(JsonRpcResponse::error(req.id, -32601, "Method not found")),
     }
 }

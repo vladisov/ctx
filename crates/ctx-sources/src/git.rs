@@ -88,10 +88,7 @@ fn get_diff(base: &str, head: Option<&str>) -> Result<String> {
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(Error::Other(anyhow::anyhow!(
-            "Git diff failed: {}",
-            stderr
-        )));
+        return Err(Error::Other(anyhow::anyhow!("Git diff failed: {}", stderr)));
     }
 
     String::from_utf8(output.stdout)
