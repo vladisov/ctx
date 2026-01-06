@@ -107,6 +107,7 @@ async fn show(storage: &Storage, pack_name: String) -> Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn add(
     storage: &Storage,
     denylist: &Denylist,

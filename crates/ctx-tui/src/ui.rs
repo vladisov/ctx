@@ -12,9 +12,9 @@ pub fn draw(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),  // Header
-            Constraint::Min(0),     // Main content
-            Constraint::Length(3),  // Footer
+            Constraint::Length(3), // Header
+            Constraint::Min(0),    // Main content
+            Constraint::Length(3), // Footer
         ])
         .split(f.area());
 
@@ -35,7 +35,11 @@ pub fn draw(f: &mut Frame, app: &App) {
 
 fn draw_header(f: &mut Frame, area: Rect) {
     let title = Paragraph::new("ctx - Interactive Pack Manager")
-        .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        .style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
         .block(Block::default().borders(Borders::ALL));
     f.render_widget(title, area);
 }
@@ -61,7 +65,11 @@ fn draw_pack_list(f: &mut Frame, app: &App, area: Rect) {
         let prefix = if is_expanded { "▾" } else { "▸" };
 
         // Get source count
-        let source_count = app.pack_artifacts.get(&pack.id).map(|v| v.len()).unwrap_or(0);
+        let source_count = app
+            .pack_artifacts
+            .get(&pack.id)
+            .map(|v| v.len())
+            .unwrap_or(0);
 
         // Format budget nicely
         let budget = pack.policies.budget_tokens;
@@ -73,12 +81,16 @@ fn draw_pack_list(f: &mut Frame, app: &App, area: Rect) {
 
         // Main pack line
         let line = if source_count > 0 {
-            format!("{} {}  ({} sources, {})", prefix, pack.name, source_count, budget_str)
+            format!(
+                "{} {}  ({} sources, {})",
+                prefix, pack.name, source_count, budget_str
+            )
         } else {
             format!("{} {}  [{}]", prefix, pack.name, budget_str)
         };
 
-        let is_pack_selected = i == app.selected_pack_index && app.selected_artifact_index.is_none();
+        let is_pack_selected =
+            i == app.selected_pack_index && app.selected_artifact_index.is_none();
         let style = if is_pack_selected {
             Style::default()
                 .fg(Color::Yellow)
@@ -168,14 +180,18 @@ fn draw_artifact_content(f: &mut Frame, app: &App, area: Rect) {
         .collect();
 
     // Get artifact info
-    let (artifact_name, token_estimate, size) = if let Some(pack) = app.packs.get(app.selected_pack_index) {
-        if let Some(artifacts) = app.pack_artifacts.get(&pack.id) {
-            if let Some(idx) = app.selected_artifact_index {
-                if let Some(item) = artifacts.get(idx) {
-                    let name = item.artifact.source_uri.clone();
-                    let tokens = item.artifact.token_estimate;
-                    let bytes = item.artifact.metadata.size_bytes;
-                    (name, tokens, bytes)
+    let (artifact_name, token_estimate, size) =
+        if let Some(pack) = app.packs.get(app.selected_pack_index) {
+            if let Some(artifacts) = app.pack_artifacts.get(&pack.id) {
+                if let Some(idx) = app.selected_artifact_index {
+                    if let Some(item) = artifacts.get(idx) {
+                        let name = item.artifact.source_uri.clone();
+                        let tokens = item.artifact.token_estimate;
+                        let bytes = item.artifact.metadata.size_bytes;
+                        (name, tokens, bytes)
+                    } else {
+                        ("unknown".to_string(), 0, 0)
+                    }
                 } else {
                     ("unknown".to_string(), 0, 0)
                 }
@@ -184,16 +200,25 @@ fn draw_artifact_content(f: &mut Frame, app: &App, area: Rect) {
             }
         } else {
             ("unknown".to_string(), 0, 0)
-        }
-    } else {
-        ("unknown".to_string(), 0, 0)
-    };
+        };
 
     let title = match app.focus {
-        Focus::Preview => format!(" {} [FOCUSED] (line {}/{}, {} tokens, {} bytes) ",
-            artifact_name, scroll_pos + 1, total_lines, token_estimate, size),
-        _ => format!(" {} (line {}/{}, {} tokens, {} bytes) ",
-            artifact_name, scroll_pos + 1, total_lines, token_estimate, size),
+        Focus::Preview => format!(
+            " {} [FOCUSED] (line {}/{}, {} tokens, {} bytes) ",
+            artifact_name,
+            scroll_pos + 1,
+            total_lines,
+            token_estimate,
+            size
+        ),
+        _ => format!(
+            " {} (line {}/{}, {} tokens, {} bytes) ",
+            artifact_name,
+            scroll_pos + 1,
+            total_lines,
+            token_estimate,
+            size
+        ),
     };
 
     let content = lines.join("\n");
@@ -233,12 +258,12 @@ fn draw_preview_stats(_f: &mut Frame, _app: &App, area: Rect, title: &str, previ
     }
 
     lines.push(String::new());
-    lines.push(format!("🔒 Render Hash"));
-    lines.push(format!("  {}...", &preview.render_hash[..16]));
+    lines.push("🔒 Render Hash".to_string());
+    lines.push(preview.render_hash.clone());
+    lines.push("".to_string());
 
     if !preview.excluded.is_empty() {
-        lines.push(String::new());
-        lines.push(format!("⚠ Excluded Artifacts:"));
+        lines.push("⚠ Excluded Artifacts:".to_string());
         for exc in preview.excluded.iter().take(5) {
             lines.push(format!("  • {}: {}", exc.source_uri, exc.reason));
         }
@@ -255,7 +280,13 @@ fn draw_preview_stats(_f: &mut Frame, _app: &App, area: Rect, title: &str, previ
     _f.render_widget(paragraph, area);
 }
 
-fn draw_preview_content(_f: &mut Frame, app: &App, area: Rect, title: &str, preview: &RenderResult) {
+fn draw_preview_content(
+    _f: &mut Frame,
+    app: &App,
+    area: Rect,
+    title: &str,
+    preview: &RenderResult,
+) {
     let (content, title_with_scroll) = if let Some(payload) = &preview.payload {
         let total_lines = payload.lines().count();
         let visible_lines = area.height.saturating_sub(2) as usize;
@@ -272,11 +303,18 @@ fn draw_preview_content(_f: &mut Frame, app: &App, area: Rect, title: &str, prev
 
         (lines.join("\n"), title_with_scroll)
     } else {
-        ("No content rendered. Use 'p' to preview first.".to_string(), title.to_string())
+        (
+            "No content rendered. Use 'p' to preview first.".to_string(),
+            title.to_string(),
+        )
     };
 
     let paragraph = Paragraph::new(content)
-        .block(Block::default().borders(Borders::ALL).title(title_with_scroll))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(title_with_scroll),
+        )
         .wrap(Wrap { trim: false });
 
     _f.render_widget(paragraph, area);
@@ -337,8 +375,8 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
         Span::raw(":quit"),
     ];
 
-    let footer = Paragraph::new(Line::from(help_text))
-        .block(Block::default().borders(Borders::ALL));
+    let footer =
+        Paragraph::new(Line::from(help_text)).block(Block::default().borders(Borders::ALL));
 
     f.render_widget(footer, area);
 }
@@ -358,14 +396,18 @@ fn draw_add_artifact_dialog(f: &mut Frame, app: &App) {
         Line::from("  text:Your inline text"),
         Line::from("  git:diff --base=main"),
         Line::from(""),
-        Line::from(Span::styled(&app.input_buffer, Style::default().fg(Color::Yellow))),
+        Line::from(Span::styled(
+            &app.input_buffer,
+            Style::default().fg(Color::Yellow),
+        )),
         Line::from(""),
-        Line::from(Span::styled("Enter to confirm, Esc to cancel", Style::default().fg(Color::DarkGray))),
+        Line::from(Span::styled(
+            "Enter to confirm, Esc to cancel",
+            Style::default().fg(Color::DarkGray),
+        )),
     ];
 
-    let paragraph = Paragraph::new(text)
-        .block(block)
-        .wrap(Wrap { trim: true });
+    let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
 
     f.render_widget(paragraph, area);
 }
@@ -385,14 +427,18 @@ fn draw_create_pack_dialog(f: &mut Frame, app: &App) {
         Line::from("  my-pack          (uses default 128k budget)"),
         Line::from("  my-pack:50000    (custom budget)"),
         Line::from(""),
-        Line::from(Span::styled(&app.input_buffer, Style::default().fg(Color::Yellow))),
+        Line::from(Span::styled(
+            &app.input_buffer,
+            Style::default().fg(Color::Yellow),
+        )),
         Line::from(""),
-        Line::from(Span::styled("Enter to confirm, Esc to cancel", Style::default().fg(Color::DarkGray))),
+        Line::from(Span::styled(
+            "Enter to confirm, Esc to cancel",
+            Style::default().fg(Color::DarkGray),
+        )),
     ];
 
-    let paragraph = Paragraph::new(text)
-        .block(block)
-        .wrap(Wrap { trim: true });
+    let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
 
     f.render_widget(paragraph, area);
 }
@@ -400,11 +446,15 @@ fn draw_create_pack_dialog(f: &mut Frame, app: &App) {
 fn draw_edit_budget_dialog(f: &mut Frame, app: &App) {
     let area = centered_rect(50, 15, f.area());
 
-    let pack_name = app.packs.get(app.selected_pack_index)
+    let pack_name = app
+        .packs
+        .get(app.selected_pack_index)
         .map(|p| p.name.as_str())
         .unwrap_or("unknown");
 
-    let current_budget = app.packs.get(app.selected_pack_index)
+    let current_budget = app
+        .packs
+        .get(app.selected_pack_index)
         .map(|p| p.policies.budget_tokens)
         .unwrap_or(0);
 
@@ -417,14 +467,18 @@ fn draw_edit_budget_dialog(f: &mut Frame, app: &App) {
         Line::from(format!("Current budget: {}", current_budget)),
         Line::from(""),
         Line::from("New budget:"),
-        Line::from(Span::styled(&app.input_buffer, Style::default().fg(Color::Yellow))),
+        Line::from(Span::styled(
+            &app.input_buffer,
+            Style::default().fg(Color::Yellow),
+        )),
         Line::from(""),
-        Line::from(Span::styled("Enter to confirm, Esc to cancel", Style::default().fg(Color::DarkGray))),
+        Line::from(Span::styled(
+            "Enter to confirm, Esc to cancel",
+            Style::default().fg(Color::DarkGray),
+        )),
     ];
 
-    let paragraph = Paragraph::new(text)
-        .block(block)
-        .wrap(Wrap { trim: true });
+    let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
 
     f.render_widget(paragraph, area);
 }
@@ -432,7 +486,9 @@ fn draw_edit_budget_dialog(f: &mut Frame, app: &App) {
 fn draw_confirm_delete_dialog(f: &mut Frame, app: &App) {
     let area = centered_rect(50, 15, f.area());
 
-    let pack_name = app.packs.get(app.selected_pack_index)
+    let pack_name = app
+        .packs
+        .get(app.selected_pack_index)
         .map(|p| p.name.as_str())
         .unwrap_or("unknown");
 
@@ -445,17 +501,18 @@ fn draw_confirm_delete_dialog(f: &mut Frame, app: &App) {
         Line::from(""),
         Line::from(Span::styled(
             format!("Delete pack '{}'?", pack_name),
-            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         )),
         Line::from(""),
         Line::from("This action cannot be undone."),
         Line::from(""),
-        Line::from(Span::styled("Y to confirm, N/Esc to cancel", Style::default().fg(Color::DarkGray))),
+        Line::from(Span::styled(
+            "Y to confirm, N/Esc to cancel",
+            Style::default().fg(Color::DarkGray),
+        )),
     ];
 
-    let paragraph = Paragraph::new(text)
-        .block(block)
-        .wrap(Wrap { trim: true });
+    let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
 
     f.render_widget(paragraph, area);
 }
@@ -469,32 +526,62 @@ fn draw_help_screen(f: &mut Frame) {
         .style(Style::default().bg(Color::Black));
 
     let text = vec![
-        Line::from(Span::styled("Navigation", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled(
+            "Navigation",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )),
         Line::from("  j/k or ↓/↑       Navigate packs and artifacts"),
         Line::from("  Space/Enter      Expand/collapse pack to show sources"),
         Line::from("  Tab              Switch focus between pack list and preview"),
         Line::from(""),
-        Line::from(Span::styled("Pack Management", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled(
+            "Pack Management",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )),
         Line::from("  c                Create new pack"),
         Line::from("  e                Edit pack budget"),
         Line::from("  D                Delete pack (with confirmation)"),
         Line::from("  r                Refresh pack list"),
         Line::from(""),
-        Line::from(Span::styled("Artifact Management", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled(
+            "Artifact Management",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )),
         Line::from("  a                Add artifact to selected pack"),
         Line::from("  d                Delete selected artifact"),
         Line::from(""),
-        Line::from(Span::styled("Preview & Content", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled(
+            "Preview & Content",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )),
         Line::from("  p                Preview pack OR load artifact content (context-aware)"),
         Line::from("  v                Toggle between stats view and content view (pack only)"),
         Line::from("  j/k              Scroll content line-by-line"),
         Line::from("  PageUp/PageDown  Scroll content page by page"),
         Line::from(""),
-        Line::from(Span::styled("Other", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled(
+            "Other",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )),
         Line::from("  ?                Show this help screen"),
         Line::from("  q                Quit"),
         Line::from(""),
-        Line::from(Span::styled("Tips:", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled(
+            "Tips:",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )),
         Line::from("  • Expand a pack to see and navigate its artifacts"),
         Line::from("  • Select an artifact (cyan highlight) and press 'p' to view its content"),
         Line::from("  • j/k scrolls content when viewing artifact or pack content"),
@@ -502,9 +589,7 @@ fn draw_help_screen(f: &mut Frame) {
         Line::from("  • Create pack format: 'name' or 'name:budget'"),
     ];
 
-    let paragraph = Paragraph::new(text)
-        .block(block)
-        .wrap(Wrap { trim: true });
+    let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
 
     f.render_widget(paragraph, area);
 }

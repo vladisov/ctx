@@ -15,33 +15,33 @@ pub struct Redactor {
 
 impl Redactor {
     pub fn new() -> Self {
-        let mut patterns = Vec::new();
-
         // Add common secret patterns (order matters - more specific first)
-        patterns.push((
-            "AWS_ACCESS_KEY".to_string(),
-            Regex::new(r"AKIA[0-9A-Z]{16}").unwrap(),
-        ));
-        patterns.push((
-            "PRIVATE_KEY".to_string(),
-            Regex::new(r"-----BEGIN[A-Z ]*PRIVATE KEY-----").unwrap(),
-        ));
-        patterns.push((
-            "GITHUB_TOKEN".to_string(),
-            Regex::new(r"gh[ps]_[a-zA-Z0-9]{36,}").unwrap(),
-        ));
-        patterns.push((
-            "JWT".to_string(),
-            Regex::new(r"eyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+").unwrap(),
-        ));
-        patterns.push((
-            "API_KEY".to_string(),
-            Regex::new(r#"(?i)(api[_-]?key|apikey)['"\s:=]+([a-zA-Z0-9_-]{20,})"#).unwrap(),
-        ));
-        patterns.push((
-            "BEARER_TOKEN".to_string(),
-            Regex::new(r#"(?i)bearer\s+([a-zA-Z0-9_.\-]{20,})"#).unwrap(),
-        ));
+        let patterns = vec![
+            (
+                "AWS_ACCESS_KEY".to_string(),
+                Regex::new(r"AKIA[0-9A-Z]{16}").unwrap(),
+            ),
+            (
+                "PRIVATE_KEY".to_string(),
+                Regex::new(r"-----BEGIN[A-Z ]*PRIVATE KEY-----").unwrap(),
+            ),
+            (
+                "GITHUB_TOKEN".to_string(),
+                Regex::new(r"gh[ps]_[a-zA-Z0-9]{36,}").unwrap(),
+            ),
+            (
+                "JWT".to_string(),
+                Regex::new(r"eyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+").unwrap(),
+            ),
+            (
+                "API_KEY".to_string(),
+                Regex::new(r#"(?i)(api[_-]?key|apikey)['"\s:=]+([a-zA-Z0-9_-]{20,})"#).unwrap(),
+            ),
+            (
+                "BEARER_TOKEN".to_string(),
+                Regex::new(r#"(?i)bearer\s+([a-zA-Z0-9_.\-]{20,})"#).unwrap(),
+            ),
+        ];
 
         Self { patterns }
     }
