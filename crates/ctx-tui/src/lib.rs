@@ -53,18 +53,42 @@ async fn run_app<B: ratatui::backend::Backend>(
                     InputMode::Normal => {
                         match key.code {
                             KeyCode::Char('q') => return Ok(()),
-                            KeyCode::Char('j') | KeyCode::Down => app.next(),
-                            KeyCode::Char('k') | KeyCode::Up => app.previous(),
+                            KeyCode::Char('?') => app.toggle_help(),
+                            KeyCode::Esc => {
+                                // Clear artifact content view, go back to navigation
+                                if app.artifact_content.is_some() {
+                                    app.artifact_content = None;
+                                    app.content_scroll = 0;
+                                }
+                            }
+                            KeyCode::Char('j') | KeyCode::Down => {
+                                // If viewing artifact content or pack content, scroll
+                                if app.artifact_content.is_some() || app.preview_mode == app::PreviewMode::Content {
+                                    app.scroll_content_down();
+                                } else {
+                                    app.next();
+                                }
+                            }
+                            KeyCode::Char('k') | KeyCode::Up => {
+                                // If viewing artifact content or pack content, scroll
+                                if app.artifact_content.is_some() || app.preview_mode == app::PreviewMode::Content {
+                                    app.scroll_content_up();
+                                } else {
+                                    app.previous();
+                                }
+                            }
                             KeyCode::Char(' ') | KeyCode::Enter => app.toggle_expand().await?,
                             KeyCode::Char('p') => app.preview().await?,
                             KeyCode::Char('v') => app.toggle_preview_mode(),
                             KeyCode::Char('r') => app.refresh().await?,
                             KeyCode::Char('a') => app.start_add_artifact(),
+                            KeyCode::Char('c') => app.start_create_pack(),
+                            KeyCode::Char('e') => app.start_edit_budget(),
                             KeyCode::Char('d') => app.delete_artifact().await?,
                             KeyCode::Char('D') => app.start_delete_pack(),
                             KeyCode::Tab => app.cycle_focus(),
-                            KeyCode::PageUp => app.scroll_content_up(),
-                            KeyCode::PageDown => app.scroll_content_down(),
+                            KeyCode::PageUp => app.scroll_page_up(),
+                            KeyCode::PageDown => app.scroll_page_down(),
                             _ => {}
                         }
                     }
@@ -77,10 +101,34 @@ async fn run_app<B: ratatui::backend::Backend>(
                             _ => {}
                         }
                     }
+                    InputMode::CreatingPack => {
+                        match key.code {
+                            KeyCode::Enter => app.confirm_create_pack().await?,
+                            KeyCode::Esc => app.cancel_input(),
+                            KeyCode::Backspace => app.input_backspace(),
+                            KeyCode::Char(c) => app.input_char(c),
+                            _ => {}
+                        }
+                    }
+                    InputMode::EditingBudget => {
+                        match key.code {
+                            KeyCode::Enter => app.confirm_edit_budget().await?,
+                            KeyCode::Esc => app.cancel_input(),
+                            KeyCode::Backspace => app.input_backspace(),
+                            KeyCode::Char(c) => app.input_char(c),
+                            _ => {}
+                        }
+                    }
                     InputMode::ConfirmDeletePack => {
                         match key.code {
                             KeyCode::Char('y') | KeyCode::Char('Y') => app.confirm_delete_pack().await?,
                             KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => app.cancel_input(),
+                            _ => {}
+                        }
+                    }
+                    InputMode::ShowingHelp => {
+                        match key.code {
+                            KeyCode::Char('?') | KeyCode::Esc | KeyCode::Char('q') => app.toggle_help(),
                             _ => {}
                         }
                     }

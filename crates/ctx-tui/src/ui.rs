@@ -1,4 +1,5 @@
 use crate::app::{App, Focus, InputMode, PreviewMode};
+use ctx_core::RenderResult;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -23,8 +24,11 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     // Draw overlays
     match app.input_mode {
-        InputMode::AddingArtifact => draw_input_dialog(f, app),
-        InputMode::ConfirmDeletePack => draw_confirm_dialog(f, app),
+        InputMode::AddingArtifact => draw_add_artifact_dialog(f, app),
+        InputMode::CreatingPack => draw_create_pack_dialog(f, app),
+        InputMode::EditingBudget => draw_edit_budget_dialog(f, app),
+        InputMode::ConfirmDeletePack => draw_confirm_delete_dialog(f, app),
+        InputMode::ShowingHelp => draw_help_screen(f),
         InputMode::Normal => {}
     }
 }
@@ -124,6 +128,13 @@ fn draw_pack_list(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn draw_preview(f: &mut Frame, app: &App, area: Rect) {
+    // If artifact is selected and content is loaded, show artifact content
+    if app.selected_artifact_index.is_some() && app.artifact_content.is_some() {
+        draw_artifact_content(f, app, area);
+        return;
+    }
+
+    // Otherwise show pack preview
     let title_suffix = match app.preview_mode {
         PreviewMode::Stats => " (stats) ",
         PreviewMode::Content => " (content) ",
@@ -144,7 +155,56 @@ fn draw_preview(f: &mut Frame, app: &App, area: Rect) {
     }
 }
 
-fn draw_preview_stats(_f: &mut Frame, _app: &App, area: Rect, title: &str, preview: &ctx_core::render::RenderResult) {
+fn draw_artifact_content(f: &mut Frame, app: &App, area: Rect) {
+    let content_str = app.artifact_content.as_ref().unwrap();
+    let total_lines = content_str.lines().count();
+    let visible_lines = area.height.saturating_sub(2) as usize;
+    let scroll_pos = app.content_scroll.min(total_lines.saturating_sub(1));
+
+    let lines: Vec<&str> = content_str
+        .lines()
+        .skip(scroll_pos)
+        .take(visible_lines)
+        .collect();
+
+    // Get artifact info
+    let (artifact_name, token_estimate, size) = if let Some(pack) = app.packs.get(app.selected_pack_index) {
+        if let Some(artifacts) = app.pack_artifacts.get(&pack.id) {
+            if let Some(idx) = app.selected_artifact_index {
+                if let Some(item) = artifacts.get(idx) {
+                    let name = item.artifact.source_uri.clone();
+                    let tokens = item.artifact.token_estimate;
+                    let bytes = item.artifact.metadata.size_bytes;
+                    (name, tokens, bytes)
+                } else {
+                    ("unknown".to_string(), 0, 0)
+                }
+            } else {
+                ("unknown".to_string(), 0, 0)
+            }
+        } else {
+            ("unknown".to_string(), 0, 0)
+        }
+    } else {
+        ("unknown".to_string(), 0, 0)
+    };
+
+    let title = match app.focus {
+        Focus::Preview => format!(" {} [FOCUSED] (line {}/{}, {} tokens, {} bytes) ",
+            artifact_name, scroll_pos + 1, total_lines, token_estimate, size),
+        _ => format!(" {} (line {}/{}, {} tokens, {} bytes) ",
+            artifact_name, scroll_pos + 1, total_lines, token_estimate, size),
+    };
+
+    let content = lines.join("\n");
+    let paragraph = Paragraph::new(content)
+        .block(Block::default().borders(Borders::ALL).title(title))
+        .wrap(Wrap { trim: false });
+
+    f.render_widget(paragraph, area);
+}
+
+fn draw_preview_stats(_f: &mut Frame, _app: &App, area: Rect, title: &str, preview: &RenderResult) {
     let utilization = (preview.token_estimate as f64 / preview.budget_tokens as f64) * 100.0;
     let status_icon = if preview.token_estimate > preview.budget_tokens {
         "⚠"
@@ -195,20 +255,28 @@ fn draw_preview_stats(_f: &mut Frame, _app: &App, area: Rect, title: &str, previ
     _f.render_widget(paragraph, area);
 }
 
-fn draw_preview_content(_f: &mut Frame, app: &App, area: Rect, title: &str, preview: &ctx_core::render::RenderResult) {
-    let content = if let Some(payload) = &preview.payload {
+fn draw_preview_content(_f: &mut Frame, app: &App, area: Rect, title: &str, preview: &RenderResult) {
+    let (content, title_with_scroll) = if let Some(payload) = &preview.payload {
+        let total_lines = payload.lines().count();
+        let visible_lines = area.height.saturating_sub(2) as usize;
+        let scroll_pos = app.content_scroll.min(total_lines.saturating_sub(1));
+
         let lines: Vec<&str> = payload
             .lines()
-            .skip(app.content_scroll)
-            .take(area.height.saturating_sub(2) as usize)
+            .skip(scroll_pos)
+            .take(visible_lines)
             .collect();
-        lines.join("\n")
+
+        let scroll_info = format!(" (line {}/{}) ", scroll_pos + 1, total_lines);
+        let title_with_scroll = title.replace(" ", &scroll_info);
+
+        (lines.join("\n"), title_with_scroll)
     } else {
-        "No content rendered. Use 'p' to preview first.".to_string()
+        ("No content rendered. Use 'p' to preview first.".to_string(), title.to_string())
     };
 
     let paragraph = Paragraph::new(content)
-        .block(Block::default().borders(Borders::ALL).title(title))
+        .block(Block::default().borders(Borders::ALL).title(title_with_scroll))
         .wrap(Wrap { trim: false });
 
     _f.render_widget(paragraph, area);
@@ -217,11 +285,11 @@ fn draw_preview_content(_f: &mut Frame, app: &App, area: Rect, title: &str, prev
 fn draw_preview_help(_f: &mut Frame, app: &App, area: Rect, title: &str) {
     let help_text = if let Some(pack) = app.packs.get(app.selected_pack_index) {
         format!(
-            "Pack: {}\n\nKeyboard shortcuts:\n  p - Preview pack\n  v - Toggle stats/content view\n  space/enter - Expand/collapse\n  a - Add artifact\n  d - Delete selected artifact\n  D - Delete pack\n  r - Refresh\n  tab - Switch focus\n  q - Quit",
+            "Pack: {}\n\nKeyboard shortcuts:\n  p - Preview pack or load artifact content\n  v - Toggle stats/content view (pack)\n  j/k - Scroll content\n  space/enter - Expand/collapse\n  a - Add artifact\n  d - Delete selected artifact\n  D - Delete pack\n  c - Create pack\n  e - Edit budget\n  r - Refresh\n  ? - Help\n  q - Quit\n\nTip: Select an artifact and press 'p' to view its content!",
             pack.name
         )
     } else {
-        "No packs found.\n\nCreate a pack with:\n  ctx pack create <name>".to_string()
+        "No packs found.\n\nCreate a pack with:\n  c - Create new pack\n  or: ctx pack create <name>".to_string()
     };
 
     let paragraph = Paragraph::new(help_text)
@@ -251,6 +319,12 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
     let help_text = vec![
         Span::raw(status),
         Span::raw(" | "),
+        Span::styled("?", Style::default().fg(Color::Cyan)),
+        Span::raw(":help "),
+        Span::styled("c", Style::default().fg(Color::Yellow)),
+        Span::raw(":create "),
+        Span::styled("e", Style::default().fg(Color::Yellow)),
+        Span::raw(":edit "),
         Span::styled("a", Style::default().fg(Color::Yellow)),
         Span::raw(":add "),
         Span::styled("d", Style::default().fg(Color::Yellow)),
@@ -259,8 +333,6 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
         Span::raw(":preview "),
         Span::styled("v", Style::default().fg(Color::Yellow)),
         Span::raw(":view "),
-        Span::styled("r", Style::default().fg(Color::Yellow)),
-        Span::raw(":refresh "),
         Span::styled("q", Style::default().fg(Color::Yellow)),
         Span::raw(":quit"),
     ];
@@ -271,7 +343,7 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(footer, area);
 }
 
-fn draw_input_dialog(f: &mut Frame, app: &App) {
+fn draw_add_artifact_dialog(f: &mut Frame, app: &App) {
     let area = centered_rect(60, 20, f.area());
 
     let block = Block::default()
@@ -298,7 +370,66 @@ fn draw_input_dialog(f: &mut Frame, app: &App) {
     f.render_widget(paragraph, area);
 }
 
-fn draw_confirm_dialog(f: &mut Frame, app: &App) {
+fn draw_create_pack_dialog(f: &mut Frame, app: &App) {
+    let area = centered_rect(60, 18, f.area());
+
+    let block = Block::default()
+        .title(" Create Pack ")
+        .borders(Borders::ALL)
+        .style(Style::default().bg(Color::Black));
+
+    let text = vec![
+        Line::from("Enter pack name or name:budget"),
+        Line::from(""),
+        Line::from("Examples:"),
+        Line::from("  my-pack          (uses default 128k budget)"),
+        Line::from("  my-pack:50000    (custom budget)"),
+        Line::from(""),
+        Line::from(Span::styled(&app.input_buffer, Style::default().fg(Color::Yellow))),
+        Line::from(""),
+        Line::from(Span::styled("Enter to confirm, Esc to cancel", Style::default().fg(Color::DarkGray))),
+    ];
+
+    let paragraph = Paragraph::new(text)
+        .block(block)
+        .wrap(Wrap { trim: true });
+
+    f.render_widget(paragraph, area);
+}
+
+fn draw_edit_budget_dialog(f: &mut Frame, app: &App) {
+    let area = centered_rect(50, 15, f.area());
+
+    let pack_name = app.packs.get(app.selected_pack_index)
+        .map(|p| p.name.as_str())
+        .unwrap_or("unknown");
+
+    let current_budget = app.packs.get(app.selected_pack_index)
+        .map(|p| p.policies.budget_tokens)
+        .unwrap_or(0);
+
+    let block = Block::default()
+        .title(format!(" Edit Budget: {} ", pack_name))
+        .borders(Borders::ALL)
+        .style(Style::default().bg(Color::Black));
+
+    let text = vec![
+        Line::from(format!("Current budget: {}", current_budget)),
+        Line::from(""),
+        Line::from("New budget:"),
+        Line::from(Span::styled(&app.input_buffer, Style::default().fg(Color::Yellow))),
+        Line::from(""),
+        Line::from(Span::styled("Enter to confirm, Esc to cancel", Style::default().fg(Color::DarkGray))),
+    ];
+
+    let paragraph = Paragraph::new(text)
+        .block(block)
+        .wrap(Wrap { trim: true });
+
+    f.render_widget(paragraph, area);
+}
+
+fn draw_confirm_delete_dialog(f: &mut Frame, app: &App) {
     let area = centered_rect(50, 15, f.area());
 
     let pack_name = app.packs.get(app.selected_pack_index)
@@ -320,6 +451,55 @@ fn draw_confirm_dialog(f: &mut Frame, app: &App) {
         Line::from("This action cannot be undone."),
         Line::from(""),
         Line::from(Span::styled("Y to confirm, N/Esc to cancel", Style::default().fg(Color::DarkGray))),
+    ];
+
+    let paragraph = Paragraph::new(text)
+        .block(block)
+        .wrap(Wrap { trim: true });
+
+    f.render_widget(paragraph, area);
+}
+
+fn draw_help_screen(f: &mut Frame) {
+    let area = centered_rect(80, 90, f.area());
+
+    let block = Block::default()
+        .title(" Help - Press ? or Esc to close ")
+        .borders(Borders::ALL)
+        .style(Style::default().bg(Color::Black));
+
+    let text = vec![
+        Line::from(Span::styled("Navigation", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))),
+        Line::from("  j/k or ↓/↑       Navigate packs and artifacts"),
+        Line::from("  Space/Enter      Expand/collapse pack to show sources"),
+        Line::from("  Tab              Switch focus between pack list and preview"),
+        Line::from(""),
+        Line::from(Span::styled("Pack Management", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))),
+        Line::from("  c                Create new pack"),
+        Line::from("  e                Edit pack budget"),
+        Line::from("  D                Delete pack (with confirmation)"),
+        Line::from("  r                Refresh pack list"),
+        Line::from(""),
+        Line::from(Span::styled("Artifact Management", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))),
+        Line::from("  a                Add artifact to selected pack"),
+        Line::from("  d                Delete selected artifact"),
+        Line::from(""),
+        Line::from(Span::styled("Preview & Content", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))),
+        Line::from("  p                Preview pack OR load artifact content (context-aware)"),
+        Line::from("  v                Toggle between stats view and content view (pack only)"),
+        Line::from("  j/k              Scroll content line-by-line"),
+        Line::from("  PageUp/PageDown  Scroll content page by page"),
+        Line::from(""),
+        Line::from(Span::styled("Other", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))),
+        Line::from("  ?                Show this help screen"),
+        Line::from("  q                Quit"),
+        Line::from(""),
+        Line::from(Span::styled("Tips:", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
+        Line::from("  • Expand a pack to see and navigate its artifacts"),
+        Line::from("  • Select an artifact (cyan highlight) and press 'p' to view its content"),
+        Line::from("  • j/k scrolls content when viewing artifact or pack content"),
+        Line::from("  • Pack preview shows token usage and excluded artifacts"),
+        Line::from("  • Create pack format: 'name' or 'name:budget'"),
     ];
 
     let paragraph = Paragraph::new(text)

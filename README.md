@@ -42,30 +42,42 @@ ctx ui
 ```
 
 **Navigation:**
-- `j/k` or `↓/↑` - Navigate packs and artifacts
+- `j/k` or `↓/↑` - Navigate packs and artifacts (or scroll in content view)
 - `Space/Enter` - Expand/collapse pack to show sources
 - `Tab` - Switch focus between pack list and preview
 
 **Pack Management:**
-- `a` - Add artifact to selected pack (opens input dialog)
-- `d` - Delete selected artifact
+- `c` - Create new pack (format: `name` or `name:budget`)
+- `e` - Edit pack budget
 - `D` - Delete entire pack (with confirmation)
 - `r` - Refresh pack list
 
+**Artifact Management:**
+- `a` - Add artifact to selected pack (opens input dialog)
+- `d` - Delete selected artifact
+
 **Preview:**
-- `p` - Preview pack (generates render stats and content)
-- `v` - Toggle between stats view and content view
-- `PageUp/PageDown` - Scroll content when in content view
+- `p` - Preview pack OR load individual artifact content (context-aware)
+- `v` - Toggle between stats view and content view (pack only)
+- `j/k` - Scroll content line-by-line (when viewing content)
+- `PageUp/PageDown` - Scroll content page-by-page
+- `Esc` - Exit artifact content view, return to navigation
 
 **Other:**
+- `?` - Show full help screen with all shortcuts
 - `q` - Quit
 
 **Features:**
-- Expandable source trees with navigation
+- Complete CRUD operations (create, read, update, delete packs)
+- Expandable source trees with artifact navigation
+- **View individual artifact content** - select artifact and press `p`
 - Live preview of token usage and budget
-- View rendered pack content
+- View rendered pack content with scroll position indicator
+- Scroll through content with line numbers and metadata display
 - Interactive add/remove artifacts
+- Edit pack budgets on the fly
 - Confirmation dialogs for destructive actions
+- Comprehensive help screen (`?` key)
 
 ### Basic Usage
 

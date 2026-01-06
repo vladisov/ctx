@@ -9,12 +9,17 @@ pub enum Focus {
     Preview,
 }
 
+#[derive(Clone, PartialEq)]
 pub enum InputMode {
     Normal,
     AddingArtifact,
+    CreatingPack,
+    EditingBudget,
     ConfirmDeletePack,
+    ShowingHelp,
 }
 
+#[derive(Clone, PartialEq)]
 pub enum PreviewMode {
     Stats,
     Content,
@@ -27,6 +32,7 @@ pub struct App {
     pub selected_artifact_index: Option<usize>, // Index within expanded pack's artifacts
     pub expanded_packs: Vec<String>, // Pack IDs that are expanded
     pub pack_artifacts: HashMap<String, Vec<PackItem>>, // Cache of pack artifacts
+    pub artifact_content: Option<String>, // Content of selected artifact
     pub focus: Focus,
     pub input_mode: InputMode,
     pub input_buffer: String,
@@ -46,6 +52,7 @@ impl App {
             selected_artifact_index: None,
             expanded_packs: Vec::new(),
             pack_artifacts: HashMap::new(),
+            artifact_content: None,
             focus: Focus::PackList,
             input_mode: InputMode::Normal,
             input_buffer: String::new(),
@@ -69,10 +76,14 @@ impl App {
                         if let Some(idx) = self.selected_artifact_index {
                             if idx < artifacts.len() - 1 {
                                 self.selected_artifact_index = Some(idx + 1);
+                                self.artifact_content = None; // Clear when changing selection
+                                self.content_scroll = 0;
                                 return;
                             }
                         } else {
                             self.selected_artifact_index = Some(0);
+                            self.artifact_content = None;
+                            self.content_scroll = 0;
                             return;
                         }
                     }
@@ -82,6 +93,8 @@ impl App {
 
         // Move to next pack
         self.selected_artifact_index = None;
+        self.artifact_content = None;
+        self.content_scroll = 0;
         self.selected_pack_index = (self.selected_pack_index + 1) % self.packs.len();
     }
 
@@ -94,8 +107,12 @@ impl App {
         if let Some(idx) = self.selected_artifact_index {
             if idx > 0 {
                 self.selected_artifact_index = Some(idx - 1);
+                self.artifact_content = None;
+                self.content_scroll = 0;
             } else {
                 self.selected_artifact_index = None; // Go back to pack
+                self.artifact_content = None;
+                self.content_scroll = 0;
             }
             return;
         }
@@ -106,6 +123,8 @@ impl App {
         } else {
             self.selected_pack_index - 1
         };
+        self.artifact_content = None;
+        self.content_scroll = 0;
     }
 
     pub async fn toggle_expand(&mut self) -> Result<()> {
@@ -137,15 +156,43 @@ impl App {
     }
 
     pub async fn preview(&mut self) -> Result<()> {
-        if let Some(pack) = self.packs.get(self.selected_pack_index) {
-            let renderer = ctx_engine::Renderer::new(self.storage.clone());
-            match renderer.render_pack(&pack.id, None).await {
-                Ok(result) => {
-                    self.preview_result = Some(result);
-                    self.status_message = Some("Preview generated".to_string());
+        // If artifact is selected, load that artifact's content
+        if let Some(artifact_idx) = self.selected_artifact_index {
+            self.load_artifact_content(artifact_idx).await?;
+        } else {
+            // Otherwise preview the whole pack
+            if let Some(pack) = self.packs.get(self.selected_pack_index) {
+                let renderer = ctx_engine::Renderer::new(self.storage.clone());
+                match renderer.render_pack(&pack.id, None).await {
+                    Ok(result) => {
+                        self.preview_result = Some(result);
+                        self.status_message = Some("Preview generated".to_string());
+                    }
+                    Err(e) => {
+                        self.status_message = Some(format!("Preview failed: {}", e));
+                    }
                 }
-                Err(e) => {
-                    self.status_message = Some(format!("Preview failed: {}", e));
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn load_artifact_content(&mut self, artifact_idx: usize) -> Result<()> {
+        if let Some(pack) = self.packs.get(self.selected_pack_index) {
+            if let Some(artifacts) = self.pack_artifacts.get(&pack.id) {
+                if let Some(item) = artifacts.get(artifact_idx) {
+                    let registry = SourceHandlerRegistry::new();
+                    match registry.load(&item.artifact).await {
+                        Ok(content) => {
+                            self.artifact_content = Some(content);
+                            self.content_scroll = 0;
+                            self.preview_mode = PreviewMode::Content;
+                            self.status_message = Some(format!("Loaded artifact: {}", item.artifact.source_uri));
+                        }
+                        Err(e) => {
+                            self.status_message = Some(format!("Failed to load artifact: {}", e));
+                        }
+                    }
                 }
             }
         }
@@ -181,13 +228,42 @@ impl App {
         self.content_scroll = self.content_scroll.saturating_add(1);
     }
 
+    pub fn scroll_page_up(&mut self) {
+        self.content_scroll = self.content_scroll.saturating_sub(10);
+    }
+
+    pub fn scroll_page_down(&mut self) {
+        self.content_scroll = self.content_scroll.saturating_add(10);
+    }
+
     pub fn start_add_artifact(&mut self) {
         self.input_mode = InputMode::AddingArtifact;
         self.input_buffer.clear();
     }
 
+    pub fn start_create_pack(&mut self) {
+        self.input_mode = InputMode::CreatingPack;
+        self.input_buffer.clear();
+    }
+
+    pub fn start_edit_budget(&mut self) {
+        if let Some(pack) = self.packs.get(self.selected_pack_index) {
+            let budget = pack.policies.budget_tokens;
+            self.input_buffer = budget.to_string();
+            self.input_mode = InputMode::EditingBudget;
+        }
+    }
+
     pub fn start_delete_pack(&mut self) {
         self.input_mode = InputMode::ConfirmDeletePack;
+    }
+
+    pub fn toggle_help(&mut self) {
+        self.input_mode = match self.input_mode {
+            InputMode::ShowingHelp => InputMode::Normal,
+            InputMode::Normal => InputMode::ShowingHelp,
+            _ => self.input_mode.clone(),
+        };
     }
 
     pub fn cancel_input(&mut self) {
@@ -317,6 +393,85 @@ impl App {
                 }
             }
         }
+        self.cancel_input();
+        Ok(())
+    }
+
+    pub async fn confirm_create_pack(&mut self) -> Result<()> {
+        let input = self.input_buffer.trim();
+        if input.is_empty() {
+            self.status_message = Some("Pack name cannot be empty".to_string());
+            self.cancel_input();
+            return Ok(());
+        }
+
+        // Parse input - format: "name" or "name:budget"
+        let (name, budget) = if let Some(pos) = input.find(':') {
+            let name = input[..pos].trim().to_string();
+            let budget_str = input[pos + 1..].trim();
+            match budget_str.parse::<usize>() {
+                Ok(b) => (name, b),
+                Err(_) => {
+                    self.status_message = Some("Invalid budget number".to_string());
+                    self.cancel_input();
+                    return Ok(());
+                }
+            }
+        } else {
+            (input.to_string(), 128000) // Default budget
+        };
+
+        let pack = Pack::new(name.clone(), ctx_core::RenderPolicy {
+            budget_tokens: budget,
+            ordering: ctx_core::OrderingStrategy::PriorityThenTime,
+        });
+
+        match self.storage.create_pack(&pack).await {
+            Ok(_) => {
+                self.status_message = Some(format!("Created pack: {} (budget: {})", name, budget));
+                self.packs = self.storage.list_packs().await?;
+                // Select the new pack
+                self.selected_pack_index = self.packs.iter().position(|p| p.id == pack.id).unwrap_or(0);
+            }
+            Err(e) => {
+                self.status_message = Some(format!("Failed to create: {}", e));
+            }
+        }
+
+        self.cancel_input();
+        Ok(())
+    }
+
+    pub async fn confirm_edit_budget(&mut self) -> Result<()> {
+        let budget_str = self.input_buffer.trim();
+        if budget_str.is_empty() {
+            self.status_message = Some("Budget cannot be empty".to_string());
+            self.cancel_input();
+            return Ok(());
+        }
+
+        match budget_str.parse::<usize>() {
+            Ok(new_budget) => {
+                if let Some(pack) = self.packs.get_mut(self.selected_pack_index) {
+                    pack.policies.budget_tokens = new_budget;
+                    let pack_clone = pack.clone();
+
+                    match self.storage.create_pack(&pack_clone).await {
+                        Ok(_) => {
+                            self.status_message = Some(format!("Updated budget to {}", new_budget));
+                            self.packs = self.storage.list_packs().await?;
+                        }
+                        Err(e) => {
+                            self.status_message = Some(format!("Failed to update: {}", e));
+                        }
+                    }
+                }
+            }
+            Err(_) => {
+                self.status_message = Some("Invalid budget number".to_string());
+            }
+        }
+
         self.cancel_input();
         Ok(())
     }
