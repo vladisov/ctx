@@ -30,6 +30,9 @@ pub enum Commands {
         #[arg(long)]
         read_only: bool,
     },
+
+    /// Launch interactive TUI
+    Ui,
 }
 
 #[derive(Subcommand)]

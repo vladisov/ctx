@@ -37,5 +37,6 @@ async fn main() -> Result<()> {
             let read_only = read_only || config.mcp.read_only;
             commands::mcp::handle(&storage, host, port, read_only).await
         }
+        cli::Commands::Ui => commands::ui::handle(&storage).await,
     }
 }

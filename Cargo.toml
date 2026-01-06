@@ -8,6 +8,7 @@ members = [
     "crates/ctx-tokens",
     "crates/ctx-engine",
     "crates/ctx-config",
+    "crates/ctx-tui",
 ]
 default-members = ["crates/ctx-cli"]
 resolver = "2"
@@ -29,6 +30,7 @@ ctx-tokens = { path = "crates/ctx-tokens" }
 ctx-engine = { path = "crates/ctx-engine" }
 ctx-mcp = { path = "crates/ctx-mcp" }
 ctx-config = { path = "crates/ctx-config" }
+ctx-tui = { path = "crates/ctx-tui" }
 
 # CLI framework
 clap = { version = "4.5", features = ["derive", "cargo", "env"] }

@@ -33,13 +33,30 @@ cargo install --path crates/ctx-cli
 cargo build --release
 ```
 
+### Interactive TUI
+
+Launch the terminal UI for visual pack management:
+
+```bash
+ctx ui
+```
+
+**Keyboard shortcuts:**
+- `j/k` or `↓/↑` - Navigate
+- `Space` - Expand/collapse pack
+- `p` - Preview selected pack
+- `r` - Refresh pack list
+- `Tab` - Cycle focus
+- `q` - Quit
+
 ### Basic Usage
 
 ```bash
-# Create a pack
-ctx pack create my-feature
+# Interactive TUI (recommended)
+ctx ui
 
-# Add content
+# Or use CLI commands directly
+ctx pack create my-feature
 ctx pack add my-feature file:src/auth.rs
 ctx pack add my-feature 'glob:tests/**/*.rs'
 ctx pack add my-feature 'git:diff --base=main'
@@ -159,7 +176,8 @@ ctx/
 │   ├── ctx-tokens/       # Token estimation
 │   ├── ctx-engine/       # Render orchestration
 │   ├── ctx-config/       # Configuration management
-│   └── ctx-mcp/          # MCP server
+│   ├── ctx-mcp/          # MCP server
+│   └── ctx-tui/          # Terminal UI (ratatui)
 ```
 
 ### Development Commands

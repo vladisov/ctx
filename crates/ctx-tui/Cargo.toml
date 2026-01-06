@@ -1,0 +1,21 @@
+[package]
+name = "ctx-tui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+# Internal
+ctx-core = { workspace = true }
+ctx-storage = { workspace = true }
+ctx-engine = { workspace = true }
+
+# TUI
+ratatui = "0.28"
+crossterm = "0.28"
+
+# Async
+tokio = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
