@@ -47,15 +47,43 @@ async fn run_app<B: ratatui::backend::Backend>(
 
         if let Event::Key(key) = event::read()? {
             if key.kind == KeyEventKind::Press {
-                match key.code {
-                    KeyCode::Char('q') => return Ok(()),
-                    KeyCode::Char('j') | KeyCode::Down => app.next(),
-                    KeyCode::Char('k') | KeyCode::Up => app.previous(),
-                    KeyCode::Char(' ') | KeyCode::Enter => app.toggle_expand().await?,
-                    KeyCode::Char('p') => app.preview().await?,
-                    KeyCode::Char('r') => app.refresh().await?,
-                    KeyCode::Tab => app.cycle_focus(),
-                    _ => {}
+                use app::InputMode;
+
+                match app.input_mode {
+                    InputMode::Normal => {
+                        match key.code {
+                            KeyCode::Char('q') => return Ok(()),
+                            KeyCode::Char('j') | KeyCode::Down => app.next(),
+                            KeyCode::Char('k') | KeyCode::Up => app.previous(),
+                            KeyCode::Char(' ') | KeyCode::Enter => app.toggle_expand().await?,
+                            KeyCode::Char('p') => app.preview().await?,
+                            KeyCode::Char('v') => app.toggle_preview_mode(),
+                            KeyCode::Char('r') => app.refresh().await?,
+                            KeyCode::Char('a') => app.start_add_artifact(),
+                            KeyCode::Char('d') => app.delete_artifact().await?,
+                            KeyCode::Char('D') => app.start_delete_pack(),
+                            KeyCode::Tab => app.cycle_focus(),
+                            KeyCode::PageUp => app.scroll_content_up(),
+                            KeyCode::PageDown => app.scroll_content_down(),
+                            _ => {}
+                        }
+                    }
+                    InputMode::AddingArtifact => {
+                        match key.code {
+                            KeyCode::Enter => app.confirm_add_artifact().await?,
+                            KeyCode::Esc => app.cancel_input(),
+                            KeyCode::Backspace => app.input_backspace(),
+                            KeyCode::Char(c) => app.input_char(c),
+                            _ => {}
+                        }
+                    }
+                    InputMode::ConfirmDeletePack => {
+                        match key.code {
+                            KeyCode::Char('y') | KeyCode::Char('Y') => app.confirm_delete_pack().await?,
+                            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => app.cancel_input(),
+                            _ => {}
+                        }
+                    }
                 }
             }
         }

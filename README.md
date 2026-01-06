@@ -41,13 +41,31 @@ Launch the terminal UI for visual pack management:
 ctx ui
 ```
 
-**Keyboard shortcuts:**
-- `j/k` or `↓/↑` - Navigate
-- `Space` - Expand/collapse pack
-- `p` - Preview selected pack
+**Navigation:**
+- `j/k` or `↓/↑` - Navigate packs and artifacts
+- `Space/Enter` - Expand/collapse pack to show sources
+- `Tab` - Switch focus between pack list and preview
+
+**Pack Management:**
+- `a` - Add artifact to selected pack (opens input dialog)
+- `d` - Delete selected artifact
+- `D` - Delete entire pack (with confirmation)
 - `r` - Refresh pack list
-- `Tab` - Cycle focus
+
+**Preview:**
+- `p` - Preview pack (generates render stats and content)
+- `v` - Toggle between stats view and content view
+- `PageUp/PageDown` - Scroll content when in content view
+
+**Other:**
 - `q` - Quit
+
+**Features:**
+- Expandable source trees with navigation
+- Live preview of token usage and budget
+- View rendered pack content
+- Interactive add/remove artifacts
+- Confirmation dialogs for destructive actions
 
 ### Basic Usage
 

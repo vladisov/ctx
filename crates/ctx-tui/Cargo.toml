@@ -9,6 +9,7 @@ rust-version.workspace = true
 ctx-core = { workspace = true }
 ctx-storage = { workspace = true }
 ctx-engine = { workspace = true }
+ctx-sources = { workspace = true }
 
 # TUI
 ratatui = "0.28"
