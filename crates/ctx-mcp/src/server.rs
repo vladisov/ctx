@@ -1,6 +1,7 @@
 use axum::{extract::State, routing::post, Json, Router};
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tower_http::cors::{Any, CorsLayer};
 use tracing::info;
 
 use ctx_engine::Renderer;
@@ -37,8 +38,15 @@ impl McpServer {
 
         let app_state = AppState { server };
 
+        // Add CORS layer to allow connections from any origin
+        let cors = CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .allow_headers(Any);
+
         let app = Router::new()
             .route("/", post(handle_jsonrpc))
+            .layer(cors)
             .with_state(app_state);
 
         let addr = format!("{}:{}", host, port);
@@ -57,6 +65,28 @@ async fn handle_jsonrpc(
     Json(req): Json<JsonRpcRequest>,
 ) -> Json<JsonRpcResponse> {
     match req.method.as_str() {
+        "initialize" => {
+            // MCP protocol initialization
+            let result = serde_json::json!({
+                "protocolVersion": "2024-11-05",
+                "capabilities": {
+                    "tools": {}
+                },
+                "serverInfo": {
+                    "name": "ctx",
+                    "version": "0.1.0"
+                }
+            });
+            Json(JsonRpcResponse::success(req.id, result))
+        }
+        "initialized" => {
+            // Notification - no response needed, but we return empty success
+            Json(JsonRpcResponse::success(req.id, serde_json::json!({})))
+        }
+        "ping" => {
+            // Health check - just return empty success
+            Json(JsonRpcResponse::success(req.id, serde_json::json!({})))
+        }
         "tools/list" => {
             let tools = list_tools(state.server.read_only);
             Json(JsonRpcResponse::success(req.id, tools))
