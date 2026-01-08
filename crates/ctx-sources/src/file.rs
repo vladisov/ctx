@@ -15,12 +15,24 @@ impl SourceHandler for FileHandler {
         };
 
         // Check if path has line range (e.g., file.txt#L10-L20)
-        let (file_path, range) = if let Some((path, range_str)) = path.split_once("#L") {
+        let (relative_path, range) = if let Some((path, range_str)) = path.split_once("#L") {
             let range = parse_line_range(range_str)?;
             (path.to_string(), Some(range))
         } else {
             (path.to_string(), options.range)
         };
+
+        // Convert to absolute path
+        let file_path = std::fs::canonicalize(&relative_path)
+            .map_err(|e| {
+                Error::Other(anyhow::anyhow!(
+                    "Failed to resolve absolute path for {}: {}",
+                    relative_path,
+                    e
+                ))
+            })?
+            .to_string_lossy()
+            .to_string();
 
         // Read file to compute hash and metadata
         let content = tokio::fs::read_to_string(&file_path).await.map_err(|e| {
