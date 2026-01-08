@@ -98,10 +98,18 @@ High-level overview of ctx's design and implementation.
 
 ### `ctx-mcp` (MCP Server)
 - **Purpose**: JSON-RPC 2.0 server for AI agents
-- **Protocol**: Model Context Protocol
+- **Protocol**: Model Context Protocol (2024-11-05)
 - **Tools**: `ctx_packs_list`, `ctx_packs_get`, `ctx_packs_preview`, `ctx_packs_snapshot`
 - **Server**: Axum on port 17373
+- **Protocol Methods**: `initialize`, `initialized`, `ping`, `tools/list`, `tools/call`
+- **Transport**: HTTP with CORS support
 - **Lines**: ~200
+
+**MCP Server Setup**:
+1. Start server: `ctx mcp --port 17373`
+2. Add to Claude Code: `claude mcp add --transport http ctx http://127.0.0.1:17373`
+3. Verify: `curl -X POST http://127.0.0.1:17373 -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"ping","params":{}}'`
+4. Use in conversations: "List my ctx packs" (Claude auto-invokes tools)
 
 ---
 

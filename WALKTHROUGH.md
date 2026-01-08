@@ -103,3 +103,49 @@ Save a perfect copy of this context for later reproducibility.
 ```bash
 ctx pack snapshot demo --label "v1-release"
 ```
+
+## 7. Using MCP with Claude Code
+
+Expose your packs to Claude Code via the MCP server.
+
+### Step 1: Start the MCP Server
+```bash
+ctx mcp --port 17373
+```
+Keep this terminal running.
+
+### Step 2: Add to Claude Code
+In a new terminal:
+```bash
+claude mcp add --transport http ctx http://127.0.0.1:17373
+```
+
+### Step 3: Verify Connection
+```bash
+claude mcp list
+# Should show: ctx: http://127.0.0.1:17373 (HTTP)
+```
+
+### Step 4: Use in Conversations
+Start a Claude Code conversation and ask:
+- "List my ctx packs"
+- "Show me what's in the demo pack"
+- "Preview the demo pack with payload"
+- "Create a snapshot of demo labeled v2.0"
+
+Claude will automatically invoke the ctx MCP tools to respond.
+
+### Available MCP Tools
+- **ctx_packs_list**: List all context packs
+- **ctx_packs_get**: Get detailed pack information
+- **ctx_packs_preview**: Preview rendered content with token estimates
+- **ctx_packs_snapshot**: Create immutable snapshots
+
+### Troubleshooting
+If connection fails, verify the server is running:
+```bash
+curl -X POST http://127.0.0.1:17373 \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"ping","params":{}}'
+```
+Should return: `{"jsonrpc":"2.0","id":1,"result":{}}`
