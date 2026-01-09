@@ -1,5 +1,6 @@
 mod app;
 mod ui;
+mod file_browser;
 
 pub use app::App;
 
@@ -89,6 +90,22 @@ async fn run_app<B: ratatui::backend::Backend>(
                             KeyCode::Tab => app.cycle_focus(),
                             KeyCode::PageUp => app.scroll_page_up(),
                             KeyCode::PageDown => app.scroll_page_down(),
+                            _ => {}
+                        }
+                    }
+                    InputMode::BrowsingFiles => {
+                        // Calculate visible height for scrolling (85% of terminal height, minus borders)
+                        let visible_height = (terminal.size()?.height as usize * 85 / 100).saturating_sub(4);
+                        match key.code {
+                            KeyCode::Char('j') | KeyCode::Down => app.browser_next(visible_height),
+                            KeyCode::Char('k') | KeyCode::Up => app.browser_previous(),
+                            KeyCode::Enter | KeyCode::Char('l') => app.browser_enter()?,
+                            KeyCode::Char('h') | KeyCode::Backspace => app.browser_go_up()?,
+                            KeyCode::Char('.') => app.browser_toggle_hidden()?,
+                            KeyCode::Tab => app.browser_cycle_type(),
+                            KeyCode::Char(' ') => app.browser_confirm_selection().await?,
+                            KeyCode::Char('i') => app.browser_switch_to_text_input(),
+                            KeyCode::Esc => app.cancel_input(),
                             _ => {}
                         }
                     }
