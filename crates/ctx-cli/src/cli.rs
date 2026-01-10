@@ -21,6 +21,10 @@ pub enum Commands {
 
     /// Start MCP server
     Mcp {
+        /// Use stdio transport (for Claude Code integration)
+        #[arg(long)]
+        stdio: bool,
+
         #[arg(long)]
         port: Option<u16>,
 

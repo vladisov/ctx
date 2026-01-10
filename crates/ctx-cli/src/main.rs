@@ -28,14 +28,19 @@ async fn main() -> Result<()> {
     match cli.command {
         cli::Commands::Pack(pack_cmd) => commands::pack::handle(pack_cmd, &storage, &config).await,
         cli::Commands::Mcp {
+            stdio,
             port,
             host,
             read_only,
         } => {
-            let port = port.unwrap_or(config.mcp.port);
-            let host = host.unwrap_or(config.mcp.host);
             let read_only = read_only || config.mcp.read_only;
-            commands::mcp::handle(&storage, host, port, read_only).await
+            if stdio {
+                commands::mcp::handle_stdio(&storage, read_only).await
+            } else {
+                let port = port.unwrap_or(config.mcp.port);
+                let host = host.unwrap_or(config.mcp.host);
+                commands::mcp::handle(&storage, host, port, read_only).await
+            }
         }
         cli::Commands::Ui => commands::ui::handle(&storage).await,
     }

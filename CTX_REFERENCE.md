@@ -196,16 +196,21 @@ ctx pack add review file:CONTRIBUTING.md
 
 ## MCP Integration
 
-Start server and connect to Claude Code:
+Connect ctx to Claude Code:
 ```bash
-# Terminal 1: Start ctx MCP server
-ctx mcp --port 17373
+# Add ctx as MCP server (stdio transport - recommended)
+claude mcp add ctx -- ctx mcp --stdio
 
-# Terminal 2: Add to Claude Code
-claude mcp add --transport http ctx http://127.0.0.1:17373
+# Verify connection
+claude mcp list
 ```
 
 Then ask Claude: "List my ctx packs" or "Preview the X pack"
+
+**HTTP transport** (for MCP Inspector or other tools):
+```bash
+ctx mcp --port 17373
+```
 
 ## File Locations
 

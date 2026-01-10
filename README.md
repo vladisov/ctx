@@ -143,14 +143,22 @@ Expose packs to MCP-compatible agents:
 Connect ctx to Claude Code for seamless pack access:
 
 ```bash
-# 1. Start the MCP server
+# Add ctx as an MCP server (uses stdio transport)
+claude mcp add ctx -- ctx mcp --stdio
+
+# Or with full path if not installed globally
+claude mcp add ctx -- /path/to/ctx mcp --stdio
+
+# Verify it's connected
+claude mcp list
+
+# Use in conversations - just ask:
+# "List my ctx packs" or "Preview the demo pack"
+```
+
+**Alternative: HTTP transport** (for MCP Inspector or other tools):
+```bash
 ctx mcp --port 17373
-
-# 2. In a new terminal, add to Claude Code
-claude mcp add --transport http ctx http://127.0.0.1:17373
-
-# 3. Use in conversations
-# Just ask: "List my ctx packs" or "Preview the demo pack"
 ```
 
 **Available Tools**:
