@@ -75,15 +75,11 @@ pub async fn export_pack_to_definition(
 
 /// Convert absolute paths in source URIs to relative paths
 fn make_relative_source(source_uri: &str, project_root: &Path) -> String {
-    if let Some(path) = source_uri.strip_prefix("file:") {
-        if let Ok(abs_path) = std::fs::canonicalize(path) {
-            if let Ok(rel_path) = abs_path.strip_prefix(project_root) {
-                return format!("file:{}", rel_path.display());
-            }
-        }
-        // If already relative or can't convert, keep as-is
-        source_uri.to_string()
-    } else {
-        source_uri.to_string()
+    if let Some(path) = source_uri.strip_prefix("file:")
+        && let Ok(abs_path) = std::fs::canonicalize(path)
+        && let Ok(rel_path) = abs_path.strip_prefix(project_root)
+    {
+        return format!("file:{}", rel_path.display());
     }
+    source_uri.to_string()
 }

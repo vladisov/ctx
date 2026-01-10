@@ -140,17 +140,16 @@ async fn add(
     // Check denylist for file artifacts
     if let ctx_core::ArtifactType::File { path } | ctx_core::ArtifactType::FileRange { path, .. } =
         &artifact.artifact_type
+        && denylist.is_denied(path)
     {
-        if denylist.is_denied(path) {
-            let pattern = denylist
-                .matching_pattern(path)
-                .unwrap_or_else(|| "unknown".to_string());
-            anyhow::bail!(
-                "File '{}' is denied by pattern '{}'. This file may contain sensitive information.",
-                path,
-                pattern
-            );
-        }
+        let pattern = denylist
+            .matching_pattern(path)
+            .unwrap_or_else(|| "unknown".to_string());
+        anyhow::bail!(
+            "File '{}' is denied by pattern '{}'. This file may contain sensitive information.",
+            path,
+            pattern
+        );
     }
 
     // Check if artifact is a collection
@@ -488,15 +487,13 @@ async fn export_pack_to_definition(
 fn make_relative_source(source_uri: &str, project_root: &Path) -> String {
     if let Some(path) = source_uri.strip_prefix("file:") {
         let path_buf = std::path::PathBuf::from(path);
-        if path_buf.is_absolute() {
-            if let Ok(rel_path) = path_buf.strip_prefix(project_root) {
-                return format!("file:{}", rel_path.display());
-            }
+        if path_buf.is_absolute()
+            && let Ok(rel_path) = path_buf.strip_prefix(project_root)
+        {
+            return format!("file:{}", rel_path.display());
         }
-        source_uri.to_string()
-    } else {
-        source_uri.to_string()
     }
+    source_uri.to_string()
 }
 
 /// Resolve relative source URIs to absolute paths

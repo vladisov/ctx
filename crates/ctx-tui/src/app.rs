@@ -1,6 +1,6 @@
 use crate::file_browser::FileBrowser;
 use anyhow::Result;
-use ctx_core::{render::RenderResult, ArtifactType, OrderingStrategy, Pack, RenderPolicy};
+use ctx_core::{ArtifactType, OrderingStrategy, Pack, RenderPolicy, render::RenderResult};
 use ctx_sources::{SourceHandlerRegistry, SourceOptions};
 use ctx_storage::{PackItem, Storage};
 use std::collections::HashMap;
@@ -90,25 +90,23 @@ impl App {
         }
 
         // Navigate within artifacts if pack is expanded
-        if let Some(pack) = self.selected_pack() {
-            if self.is_expanded(&pack.id) {
-                if let Some(artifacts) = self.pack_artifacts.get(&pack.id) {
-                    if !artifacts.is_empty() {
-                        match self.selected_artifact_index {
-                            Some(idx) if idx < artifacts.len() - 1 => {
-                                self.selected_artifact_index = Some(idx + 1);
-                                self.clear_artifact_state();
-                                return;
-                            }
-                            None => {
-                                self.selected_artifact_index = Some(0);
-                                self.clear_artifact_state();
-                                return;
-                            }
-                            _ => {}
-                        }
-                    }
+        if let Some(pack) = self.selected_pack()
+            && self.is_expanded(&pack.id)
+            && let Some(artifacts) = self.pack_artifacts.get(&pack.id)
+            && !artifacts.is_empty()
+        {
+            match self.selected_artifact_index {
+                Some(idx) if idx < artifacts.len() - 1 => {
+                    self.selected_artifact_index = Some(idx + 1);
+                    self.clear_artifact_state();
+                    return;
                 }
+                None => {
+                    self.selected_artifact_index = Some(0);
+                    self.clear_artifact_state();
+                    return;
+                }
+                _ => {}
             }
         }
 
@@ -424,10 +422,10 @@ impl App {
                     Ok(_) => {
                         self.status_message = Some(format!("Added: {uri}"));
                         self.pack_artifacts.remove(&pack_id);
-                        if self.is_expanded(&pack_id) {
-                            if let Ok(a) = self.storage.get_pack_artifacts(&pack_id).await {
-                                self.pack_artifacts.insert(pack_id, a);
-                            }
+                        if self.is_expanded(&pack_id)
+                            && let Ok(a) = self.storage.get_pack_artifacts(&pack_id).await
+                        {
+                            self.pack_artifacts.insert(pack_id, a);
                         }
                     }
                     Err(e) => self.status_message = Some(format!("Failed: {e}")),

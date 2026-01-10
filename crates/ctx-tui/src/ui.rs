@@ -1,11 +1,11 @@
 use crate::app::{App, Focus, InputMode, PreviewMode};
 use ctx_core::RenderResult;
 use ratatui::{
+    Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
-    Frame,
 };
 
 // Style helpers
@@ -94,20 +94,20 @@ fn draw_pack_list(f: &mut Frame, app: &App, area: Rect) {
         };
         items.push(ListItem::new(line).style(style));
 
-        if is_expanded && i == app.selected_pack_index {
-            if let Some(artifacts) = app.pack_artifacts.get(&pack.id) {
-                for (idx, artifact) in artifacts.iter().enumerate() {
-                    let is_artifact_selected = app.selected_artifact_index == Some(idx);
-                    let style = if is_artifact_selected {
-                        bold(Color::Cyan)
-                    } else {
-                        dim()
-                    };
-                    items.push(
-                        ListItem::new(format!("  ├─ {}", artifact.artifact.source_uri))
-                            .style(style),
-                    );
-                }
+        if is_expanded
+            && i == app.selected_pack_index
+            && let Some(artifacts) = app.pack_artifacts.get(&pack.id)
+        {
+            for (idx, artifact) in artifacts.iter().enumerate() {
+                let is_artifact_selected = app.selected_artifact_index == Some(idx);
+                let style = if is_artifact_selected {
+                    bold(Color::Cyan)
+                } else {
+                    dim()
+                };
+                items.push(
+                    ListItem::new(format!("  ├─ {}", artifact.artifact.source_uri)).style(style),
+                );
             }
         }
     }

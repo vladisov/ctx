@@ -1,5 +1,5 @@
 use anyhow::Result;
-use ctx_mcp::{run_stdio, McpServer};
+use ctx_mcp::{McpServer, run_stdio};
 use ctx_storage::Storage;
 use std::sync::Arc;
 
