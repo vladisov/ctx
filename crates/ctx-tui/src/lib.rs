@@ -86,20 +86,20 @@ async fn run_app<B: ratatui::backend::Backend>(
                         _ => {}
                     }
                 }
-                InputMode::AddingArtifact
-                | InputMode::CreatingPack
-                | InputMode::EditingBudget => match key.code {
-                    KeyCode::Enter => match app.input_mode {
-                        InputMode::AddingArtifact => app.confirm_add_artifact().await?,
-                        InputMode::CreatingPack => app.confirm_create_pack().await?,
-                        InputMode::EditingBudget => app.confirm_edit_budget().await?,
+                InputMode::AddingArtifact | InputMode::CreatingPack | InputMode::EditingBudget => {
+                    match key.code {
+                        KeyCode::Enter => match app.input_mode {
+                            InputMode::AddingArtifact => app.confirm_add_artifact().await?,
+                            InputMode::CreatingPack => app.confirm_create_pack().await?,
+                            InputMode::EditingBudget => app.confirm_edit_budget().await?,
+                            _ => {}
+                        },
+                        KeyCode::Esc => app.cancel_input(),
+                        KeyCode::Backspace => app.input_backspace(),
+                        KeyCode::Char(c) => app.input_char(c),
                         _ => {}
-                    },
-                    KeyCode::Esc => app.cancel_input(),
-                    KeyCode::Backspace => app.input_backspace(),
-                    KeyCode::Char(c) => app.input_char(c),
-                    _ => {}
-                },
+                    }
+                }
                 InputMode::ConfirmDeletePack => match key.code {
                     KeyCode::Char('y') | KeyCode::Char('Y') => app.confirm_delete_pack().await?,
                     KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => app.cancel_input(),
