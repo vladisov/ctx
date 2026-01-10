@@ -11,17 +11,17 @@ pub async fn call_tool(
         .ok_or_else(|| anyhow::anyhow!("Missing tool name"))?;
     let args = &params["arguments"];
 
-    match tool_name {
+    let result = match tool_name {
         "ctx_packs_list" => {
             let packs = server.db.list_packs().await?;
-            Ok(serde_json::to_value(packs)?)
+            serde_json::to_string_pretty(&packs)?
         }
         "ctx_packs_get" => {
             let pack_name = args["pack"]
                 .as_str()
                 .ok_or_else(|| anyhow::anyhow!("Missing pack parameter"))?;
             let pack = server.db.get_pack(pack_name).await?;
-            Ok(serde_json::to_value(pack)?)
+            serde_json::to_string_pretty(&pack)?
         }
         "ctx_packs_preview" => {
             let pack_ids: Vec<String> = serde_json::from_value(args["packs"].clone())?;
@@ -36,7 +36,7 @@ pub async fn call_tool(
                 result.payload = None;
             }
 
-            Ok(serde_json::to_value(result)?)
+            serde_json::to_string_pretty(&result)?
         }
         "ctx_packs_snapshot" => {
             let pack_ids: Vec<String> = serde_json::from_value(args["packs"].clone())?;
@@ -47,9 +47,6 @@ pub async fn call_tool(
                 .render_request(RenderRequest { pack_ids })
                 .await?;
 
-            // Create snapshot
-            // Note: context-core Snapshot::new might need updating if it expects something else
-            // But assuming basic constructor:
             let snapshot = ctx_core::Snapshot::new(
                 result.render_hash.clone(),
                 blake3::hash(result.payload.clone().unwrap_or_default().as_bytes())
@@ -60,18 +57,22 @@ pub async fn call_tool(
 
             server.db.create_snapshot(&snapshot).await?;
 
-            Ok(json!({
-                "snapshot_id": snapshot.id,
-                "render_hash": snapshot.render_hash,
-            }))
+            format!("Snapshot created: {}\nRender hash: {}", snapshot.id, snapshot.render_hash)
         }
         _ => anyhow::bail!("Unknown tool: {}", tool_name),
-    }
+    };
+
+    // MCP spec requires content array with type/text objects
+    Ok(json!({
+        "content": [
+            {"type": "text", "text": result}
+        ]
+    }))
 }
 
 pub fn list_tools(read_only: bool) -> serde_json::Value {
     let tools = vec![
-        tool_schema("ctx_packs_list", "List all context packs", json!({})),
+        tool_schema("ctx_packs_list", "List all context packs", json!({"type": "object", "properties": {}})),
         tool_schema(
             "ctx_packs_get",
             "Get pack details",
