@@ -1,5 +1,6 @@
 use crate::server::McpServer;
-use ctx_core::RenderRequest;
+use ctx_core::{OrderingStrategy, Pack, RenderPolicy, RenderRequest};
+use ctx_sources::{SourceHandlerRegistry, SourceOptions};
 use serde_json::json;
 
 pub async fn call_tool(
@@ -59,6 +60,74 @@ pub async fn call_tool(
 
             format!("Snapshot created: {}\nRender hash: {}", snapshot.id, snapshot.render_hash)
         }
+        "ctx_packs_create" => {
+            if server.read_only {
+                anyhow::bail!("Server is in read-only mode");
+            }
+            let name = args["name"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("Missing name parameter"))?;
+            let budget = args["budget"].as_u64().unwrap_or(128000) as usize;
+
+            let pack = Pack::new(
+                name.to_string(),
+                RenderPolicy {
+                    budget_tokens: budget,
+                    ordering: OrderingStrategy::PriorityThenTime,
+                },
+            );
+            server.db.create_pack(&pack).await?;
+
+            format!("Created pack '{}' with {} token budget (id: {})", name, budget, pack.id)
+        }
+        "ctx_packs_add_artifact" => {
+            if server.read_only {
+                anyhow::bail!("Server is in read-only mode");
+            }
+            let pack_name = args["pack"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("Missing pack parameter"))?;
+            let source = args["source"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("Missing source parameter"))?;
+            let priority = args["priority"].as_i64().unwrap_or(0);
+
+            let pack = server.db.get_pack(pack_name).await?;
+            let registry = SourceHandlerRegistry::new();
+            let options = SourceOptions {
+                priority,
+                ..Default::default()
+            };
+
+            let artifact = registry.parse(source, options).await?;
+            let is_collection = matches!(
+                artifact.artifact_type,
+                ctx_core::ArtifactType::CollectionMdDir { .. } | ctx_core::ArtifactType::CollectionGlob { .. }
+            );
+
+            if is_collection {
+                server.db.create_artifact(&artifact).await?;
+                server.db.add_artifact_to_pack(&pack.id, &artifact.id, priority).await?;
+            } else {
+                let content = registry.load(&artifact).await?;
+                server.db.add_artifact_to_pack_with_content(&pack.id, &artifact, &content, priority).await?;
+            }
+
+            format!("Added '{}' to pack '{}' (artifact id: {})", source, pack.name, artifact.id)
+        }
+        "ctx_packs_delete" => {
+            if server.read_only {
+                anyhow::bail!("Server is in read-only mode");
+            }
+            let pack_name = args["pack"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("Missing pack parameter"))?;
+
+            let pack = server.db.get_pack(pack_name).await?;
+            server.db.delete_pack(&pack.id).await?;
+
+            format!("Deleted pack '{}'", pack.name)
+        }
         _ => anyhow::bail!("Unknown tool: {}", tool_name),
     };
 
@@ -71,11 +140,11 @@ pub async fn call_tool(
 }
 
 pub fn list_tools(read_only: bool) -> serde_json::Value {
-    let tools = vec![
+    let mut tools = vec![
         tool_schema("ctx_packs_list", "List all context packs", json!({"type": "object", "properties": {}})),
         tool_schema(
             "ctx_packs_get",
-            "Get pack details",
+            "Get pack details including artifacts",
             json!({
                 "type": "object",
                 "properties": {
@@ -86,28 +155,28 @@ pub fn list_tools(read_only: bool) -> serde_json::Value {
         ),
         tool_schema(
             "ctx_packs_preview",
-            "Preview pack rendering",
+            "Preview pack rendering with token counts",
             json!({
                 "type": "object",
                 "properties": {
                     "packs": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Pack IDs to render"
+                        "description": "Pack names or IDs to render"
                     },
-                    "show_payload": {"type": "boolean", "default": false}
+                    "show_payload": {"type": "boolean", "default": false, "description": "Include rendered content"}
                 },
                 "required": ["packs"]
             }),
         ),
         tool_schema(
             "ctx_packs_snapshot",
-            "Create snapshot of rendered packs",
+            "Create immutable snapshot of rendered packs",
             json!({
                 "type": "object",
                 "properties": {
-                    "packs": {"type": "array", "items": {"type": "string"}},
-                    "label": {"type": "string"}
+                    "packs": {"type": "array", "items": {"type": "string"}, "description": "Pack names or IDs"},
+                    "label": {"type": "string", "description": "Optional label for snapshot"}
                 },
                 "required": ["packs"]
             }),
@@ -115,7 +184,44 @@ pub fn list_tools(read_only: bool) -> serde_json::Value {
     ];
 
     if !read_only {
-        // Add write tools in future
+        tools.extend([
+            tool_schema(
+                "ctx_packs_create",
+                "Create a new context pack",
+                json!({
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Pack name"},
+                        "budget": {"type": "integer", "description": "Token budget (default: 128000)"}
+                    },
+                    "required": ["name"]
+                }),
+            ),
+            tool_schema(
+                "ctx_packs_add_artifact",
+                "Add artifact to pack. Sources: file:path, glob:pattern, text:content, git:diff",
+                json!({
+                    "type": "object",
+                    "properties": {
+                        "pack": {"type": "string", "description": "Pack name or ID"},
+                        "source": {"type": "string", "description": "Source URI (file:path, glob:src/**/*.rs, text:content, git:diff --base=main)"},
+                        "priority": {"type": "integer", "description": "Priority (higher = included first, default: 0)"}
+                    },
+                    "required": ["pack", "source"]
+                }),
+            ),
+            tool_schema(
+                "ctx_packs_delete",
+                "Delete a pack and all its artifacts",
+                json!({
+                    "type": "object",
+                    "properties": {
+                        "pack": {"type": "string", "description": "Pack name or ID"}
+                    },
+                    "required": ["pack"]
+                }),
+            ),
+        ]);
     }
 
     json!({ "tools": tools })

@@ -9,6 +9,7 @@ ctx-core = { workspace = true }
 ctx-storage = { workspace = true }
 ctx-engine = { workspace = true }
 ctx-security = { workspace = true }
+ctx-sources = { workspace = true }
 
 # Hashing
 blake3 = { workspace = true }
