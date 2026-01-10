@@ -1,9 +1,10 @@
 use anyhow::Result;
-use ctx_config::Config;
+use ctx_config::{ArtifactDefinition, Config, PackDefinition, ProjectConfig};
 use ctx_core::{OrderingStrategy, Pack, RenderPolicy, Snapshot};
 use ctx_engine::Renderer;
 use ctx_sources::{Denylist, SourceHandlerRegistry, SourceOptions};
 use ctx_storage::Storage;
+use std::path::Path;
 
 use crate::cli::PackCommands;
 
@@ -42,6 +43,8 @@ pub async fn handle(cmd: PackCommands, storage: &Storage, config: &Config) -> Re
         PackCommands::Snapshot { pack, label } => snapshot(storage, pack, label).await,
         PackCommands::Delete { pack, force } => delete(storage, pack, force).await,
         PackCommands::Snapshots { pack } => snapshots(storage, pack).await,
+        PackCommands::Sync => sync(storage, config, &denylist).await,
+        PackCommands::Save { packs, all } => save(storage, packs, all).await,
     }
 }
 
@@ -337,4 +340,236 @@ async fn snapshots(storage: &Storage, pack_name: String) -> Result<()> {
     }
 
     Ok(())
+}
+
+async fn sync(storage: &Storage, _config: &Config, denylist: &Denylist) -> Result<()> {
+    let (project_root, project_config) = ProjectConfig::find_and_load()?
+        .ok_or_else(|| anyhow::anyhow!("No ctx.toml found in current or parent directories"))?;
+
+    let namespace = ProjectConfig::project_namespace(&project_root);
+    println!("Syncing packs from ctx.toml (project: {})", namespace);
+
+    let registry = SourceHandlerRegistry::new();
+    let mut synced = 0;
+    let mut errors = 0;
+
+    for (pack_name, pack_def) in &project_config.packs {
+        let full_name = ProjectConfig::namespaced_pack_name(&project_root, pack_name);
+        let budget = pack_def
+            .budget
+            .unwrap_or(project_config.config.default_budget);
+
+        // Check if pack exists, create or update
+        let pack = match storage.get_pack(&full_name).await {
+            Ok(existing) => {
+                // Pack exists - for now just use existing
+                // TODO: update budget if changed
+                existing
+            }
+            Err(_) => {
+                // Create new pack
+                let policies = RenderPolicy {
+                    budget_tokens: budget,
+                    ordering: OrderingStrategy::PriorityThenTime,
+                };
+                let new_pack = Pack::new(full_name.clone(), policies);
+                storage.create_pack(&new_pack).await?;
+                new_pack
+            }
+        };
+
+        // Clear existing artifacts and re-add from definition
+        // (simple approach - could be smarter with diffing)
+        let existing_artifacts = storage.get_pack_artifacts(&pack.id).await?;
+        for item in existing_artifacts {
+            storage
+                .remove_artifact_from_pack(&pack.id, &item.artifact.id)
+                .await
+                .ok(); // Ignore errors
+        }
+
+        // Add artifacts from definition
+        for artifact_def in &pack_def.artifacts {
+            // Resolve relative paths to absolute
+            let source = resolve_source(&artifact_def.source, &project_root);
+
+            // Check denylist
+            if denylist.is_denied(&source) {
+                eprintln!("  Warning: '{}' is denied by denylist, skipping", source);
+                continue;
+            }
+
+            let options = SourceOptions {
+                priority: artifact_def.priority,
+                ..Default::default()
+            };
+
+            match registry.parse(&source, options).await {
+                Ok(artifact) => {
+                    let is_collection = matches!(
+                        artifact.artifact_type,
+                        ctx_core::ArtifactType::CollectionMdDir { .. }
+                            | ctx_core::ArtifactType::CollectionGlob { .. }
+                    );
+
+                    if is_collection {
+                        storage.create_artifact(&artifact).await?;
+                        storage
+                            .add_artifact_to_pack(&pack.id, &artifact.id, artifact_def.priority)
+                            .await?;
+                    } else {
+                        match registry.load(&artifact).await {
+                            Ok(content) => {
+                                storage
+                                    .add_artifact_to_pack_with_content(
+                                        &pack.id,
+                                        &artifact,
+                                        &content,
+                                        artifact_def.priority,
+                                    )
+                                    .await?;
+                            }
+                            Err(e) => {
+                                eprintln!("  Warning: Could not load '{}': {}", source, e);
+                                errors += 1;
+                                continue;
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("  Warning: Could not parse '{}': {}", source, e);
+                    errors += 1;
+                    continue;
+                }
+            }
+        }
+
+        println!("  ✓ {} ({} artifacts)", pack_name, pack_def.artifacts.len());
+        synced += 1;
+    }
+
+    println!(
+        "\nSynced {} pack(s){}",
+        synced,
+        if errors > 0 {
+            format!(" ({} warnings)", errors)
+        } else {
+            String::new()
+        }
+    );
+
+    Ok(())
+}
+
+async fn save(storage: &Storage, packs: Vec<String>, all: bool) -> Result<()> {
+    let current_dir = std::env::current_dir()?;
+
+    // Load existing ctx.toml or create new
+    let (project_root, mut project_config) = ProjectConfig::find_and_load()?
+        .unwrap_or_else(|| (current_dir.clone(), ProjectConfig::default()));
+
+    let packs_to_save: Vec<String> = if all {
+        // Get all packs from DB
+        storage
+            .list_packs()
+            .await?
+            .into_iter()
+            .map(|p| p.name)
+            .collect()
+    } else {
+        packs
+    };
+
+    if packs_to_save.is_empty() {
+        println!("No packs to save.");
+        return Ok(());
+    }
+
+    let mut saved = 0;
+    for pack_name in &packs_to_save {
+        match export_pack_to_definition(storage, pack_name, &project_root).await {
+            Ok((local_name, def)) => {
+                project_config.packs.insert(local_name.clone(), def);
+                println!("  ✓ {}", local_name);
+                saved += 1;
+            }
+            Err(e) => {
+                eprintln!("  Warning: Could not save '{}': {}", pack_name, e);
+            }
+        }
+    }
+
+    project_config.save(&project_root)?;
+    println!("\nSaved {} pack(s) to ctx.toml", saved);
+
+    Ok(())
+}
+
+/// Export a pack from DB to a PackDefinition
+async fn export_pack_to_definition(
+    storage: &Storage,
+    pack_name: &str,
+    project_root: &Path,
+) -> Result<(String, PackDefinition)> {
+    let pack = storage.get_pack(pack_name).await?;
+    let artifacts = storage.get_pack_artifacts(&pack.id).await?;
+
+    let artifact_defs: Vec<ArtifactDefinition> = artifacts
+        .into_iter()
+        .map(|item| {
+            let source = make_relative_source(&item.artifact.source_uri, project_root);
+            ArtifactDefinition {
+                source,
+                priority: item.priority,
+            }
+        })
+        .collect();
+
+    // Strip namespace if present
+    let local_name = ProjectConfig::strip_namespace(project_root, &pack.name)
+        .unwrap_or_else(|| pack.name.clone());
+
+    let definition = PackDefinition {
+        budget: Some(pack.policies.budget_tokens),
+        artifacts: artifact_defs,
+    };
+
+    Ok((local_name, definition))
+}
+
+/// Convert absolute paths in source URIs to relative paths
+fn make_relative_source(source_uri: &str, project_root: &Path) -> String {
+    if let Some(path) = source_uri.strip_prefix("file:") {
+        let path_buf = std::path::PathBuf::from(path);
+        if path_buf.is_absolute() {
+            if let Ok(rel_path) = path_buf.strip_prefix(project_root) {
+                return format!("file:{}", rel_path.display());
+            }
+        }
+        source_uri.to_string()
+    } else {
+        source_uri.to_string()
+    }
+}
+
+/// Resolve relative source URIs to absolute paths
+fn resolve_source(source_uri: &str, project_root: &Path) -> String {
+    if let Some(path) = source_uri.strip_prefix("file:") {
+        let path_buf = std::path::PathBuf::from(path);
+        if path_buf.is_relative() {
+            let abs_path = project_root.join(&path_buf);
+            return format!("file:{}", abs_path.display());
+        }
+        source_uri.to_string()
+    } else if let Some(pattern) = source_uri.strip_prefix("glob:") {
+        // For globs, prepend project root to make pattern absolute
+        if !pattern.starts_with('/') {
+            let abs_pattern = project_root.join(pattern);
+            return format!("glob:{}", abs_pattern.display());
+        }
+        source_uri.to_string()
+    } else {
+        source_uri.to_string()
+    }
 }

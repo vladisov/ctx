@@ -26,6 +26,7 @@ async fn main() -> Result<()> {
     let storage = Storage::new(db_path).await?;
 
     match cli.command {
+        cli::Commands::Init { import } => commands::init::handle(&storage, import).await,
         cli::Commands::Pack(pack_cmd) => commands::pack::handle(pack_cmd, &storage, &config).await,
         cli::Commands::Mcp {
             stdio,

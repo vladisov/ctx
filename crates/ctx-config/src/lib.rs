@@ -1,5 +1,10 @@
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
+// ============================================================================
+// Global Config (~/.ctx/config.toml)
+// ============================================================================
 
 /// Simple configuration for ctx
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -117,6 +122,131 @@ impl Config {
     }
 }
 
+// ============================================================================
+// Project Config (ctx.toml)
+// ============================================================================
+
+/// Project-level configuration (ctx.toml)
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectConfig {
+    /// Project-level settings
+    #[serde(default)]
+    pub config: ProjectSettings,
+
+    /// Pack definitions
+    #[serde(default)]
+    pub packs: HashMap<String, PackDefinition>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectSettings {
+    /// Default token budget for packs in this project
+    #[serde(default = "default_budget")]
+    pub default_budget: usize,
+}
+
+impl Default for ProjectSettings {
+    fn default() -> Self {
+        Self {
+            default_budget: default_budget(),
+        }
+    }
+}
+
+/// Pack definition in ctx.toml
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PackDefinition {
+    /// Token budget (optional, uses project default)
+    pub budget: Option<usize>,
+
+    /// Artifacts in this pack
+    #[serde(default)]
+    pub artifacts: Vec<ArtifactDefinition>,
+}
+
+/// Artifact definition in ctx.toml
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArtifactDefinition {
+    /// Source URI (file:path, glob:pattern, text:content, git:diff)
+    pub source: String,
+
+    /// Priority (higher = included first)
+    #[serde(default)]
+    pub priority: i64,
+}
+
+impl ProjectConfig {
+    /// Find and load ctx.toml from current or parent directories
+    pub fn find_and_load() -> anyhow::Result<Option<(PathBuf, Self)>> {
+        if let Some(path) = Self::find_project_root()? {
+            let config = Self::load(&path)?;
+            Ok(Some((path, config)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Find ctx.toml by walking up from current directory
+    pub fn find_project_root() -> anyhow::Result<Option<PathBuf>> {
+        let current = std::env::current_dir()?;
+        Self::find_project_root_from(&current)
+    }
+
+    /// Find ctx.toml by walking up from given directory
+    pub fn find_project_root_from(start: &Path) -> anyhow::Result<Option<PathBuf>> {
+        let mut current = start.to_path_buf();
+
+        loop {
+            let ctx_toml = current.join("ctx.toml");
+            if ctx_toml.exists() {
+                return Ok(Some(current));
+            }
+
+            if !current.pop() {
+                break;
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Load ctx.toml from project root
+    pub fn load(project_root: &Path) -> anyhow::Result<Self> {
+        let path = project_root.join("ctx.toml");
+        let content = std::fs::read_to_string(&path)?;
+        let config: ProjectConfig = toml::from_str(&content)?;
+        Ok(config)
+    }
+
+    /// Save ctx.toml to project root
+    pub fn save(&self, project_root: &Path) -> anyhow::Result<()> {
+        let path = project_root.join("ctx.toml");
+        let content = toml::to_string_pretty(self)?;
+        std::fs::write(&path, content)?;
+        Ok(())
+    }
+
+    /// Get project namespace from directory name
+    pub fn project_namespace(project_root: &Path) -> String {
+        project_root
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown")
+            .to_string()
+    }
+
+    /// Create namespaced pack name
+    pub fn namespaced_pack_name(project_root: &Path, pack_name: &str) -> String {
+        format!("{}:{}", Self::project_namespace(project_root), pack_name)
+    }
+
+    /// Strip namespace from pack name if it matches this project
+    pub fn strip_namespace(project_root: &Path, full_name: &str) -> Option<String> {
+        let prefix = format!("{}:", Self::project_namespace(project_root));
+        full_name.strip_prefix(&prefix).map(String::from)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -142,5 +272,58 @@ mod tests {
         let config = Config::default();
         assert!(config.denylist.patterns.contains(&"**/.env*".to_string()));
         assert!(config.denylist.patterns.contains(&"**/.aws/**".to_string()));
+    }
+
+    #[test]
+    fn test_project_config_parse() {
+        let toml_str = r#"
+[config]
+default_budget = 50000
+
+[packs.style]
+budget = 128000
+artifacts = [
+    { source = "file:CONTRIBUTING.md", priority = 10 },
+    { source = "glob:src/**/*.rs" },
+]
+
+[packs.architecture]
+artifacts = [
+    { source = "file:README.md" },
+]
+"#;
+        let config: ProjectConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.config.default_budget, 50000);
+        assert_eq!(config.packs.len(), 2);
+        assert!(config.packs.contains_key("style"));
+        assert!(config.packs.contains_key("architecture"));
+
+        let style = &config.packs["style"];
+        assert_eq!(style.budget, Some(128000));
+        assert_eq!(style.artifacts.len(), 2);
+        assert_eq!(style.artifacts[0].source, "file:CONTRIBUTING.md");
+        assert_eq!(style.artifacts[0].priority, 10);
+    }
+
+    #[test]
+    fn test_namespaced_pack_name() {
+        let root = PathBuf::from("/home/user/my-project");
+        assert_eq!(
+            ProjectConfig::namespaced_pack_name(&root, "style"),
+            "my-project:style"
+        );
+    }
+
+    #[test]
+    fn test_strip_namespace() {
+        let root = PathBuf::from("/home/user/my-project");
+        assert_eq!(
+            ProjectConfig::strip_namespace(&root, "my-project:style"),
+            Some("style".to_string())
+        );
+        assert_eq!(
+            ProjectConfig::strip_namespace(&root, "other-project:style"),
+            None
+        );
     }
 }

@@ -15,6 +15,13 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Initialize ctx.toml in current directory
+    Init {
+        /// Import existing packs into ctx.toml
+        #[arg(long)]
+        import: Vec<String>,
+    },
+
     /// Manage context packs
     #[command(subcommand)]
     Pack(PackCommands),
@@ -144,5 +151,19 @@ pub enum PackCommands {
     Snapshots {
         /// Pack name or ID
         pack: String,
+    },
+
+    /// Sync packs from ctx.toml to database
+    Sync,
+
+    /// Save pack(s) to ctx.toml
+    Save {
+        /// Pack name(s) to save (or --all)
+        #[arg(required_unless_present = "all")]
+        packs: Vec<String>,
+
+        /// Save all packs
+        #[arg(long)]
+        all: bool,
     },
 }
