@@ -11,12 +11,7 @@ use ratatui::{
 // Style helpers
 fn bold(color: Color) -> Style { Style::default().fg(color).add_modifier(Modifier::BOLD) }
 fn dim() -> Style { Style::default().fg(Color::DarkGray) }
-fn separator() -> Line<'static> { Line::from(Span::styled("─".repeat(50), dim())) }
-fn input_line(buffer: &str) -> Line<'_> { Line::from(vec![
-    Span::styled("> ", bold(Color::Green)),
-    Span::styled(buffer.to_string(), Style::default().fg(Color::Yellow)),
-    Span::styled("█", Style::default().fg(Color::Yellow)),
-])}
+fn separator() -> Line<'static> { Line::from(Span::styled("─".repeat(40), dim())) }
 
 pub fn draw(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
@@ -213,7 +208,17 @@ fn format_tokens(tokens: usize) -> String {
 
 fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
     let status = app.status_message.as_deref().unwrap_or("Ready");
+    let mode = match app.input_mode {
+        InputMode::Normal => "",
+        InputMode::BrowsingFiles => "[BROWSE] ",
+        InputMode::AddingArtifact => "[ADD] ",
+        InputMode::CreatingPack => "[CREATE] ",
+        InputMode::EditingBudget => "[EDIT] ",
+        InputMode::ConfirmDeletePack => "[DELETE?] ",
+        InputMode::ShowingHelp => "[HELP] ",
+    };
     let spans = vec![
+        Span::styled(mode, bold(Color::Magenta)),
         Span::raw(status), Span::raw(" | "),
         Span::styled("?", Style::default().fg(Color::Cyan)), Span::raw(":help "),
         Span::styled("c", Style::default().fg(Color::Yellow)), Span::raw(":create "),
@@ -224,63 +229,64 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(Paragraph::new(Line::from(spans)).block(Block::default().borders(Borders::ALL)), area);
 }
 
-fn draw_add_artifact_dialog(f: &mut Frame, app: &App) {
-    let area = centered_rect(60, 22, f.area());
-    let lines = vec![
-        Line::from(Span::styled("Enter artifact URI:", bold(Color::Cyan))),
+fn draw_input_dialog(f: &mut Frame, title: &str, prompt: &str, examples: &[&str], input: &str) {
+    let height = 12 + examples.len() as u16;
+    let area = centered_rect(65, height, f.area());
+    f.render_widget(Clear, area);
+
+    let mut lines = vec![
         Line::from(""),
-        Line::from(Span::styled("Examples:", dim())),
-        Line::from("  file:path/to/file"),
-        Line::from("  glob:src/**/*.rs"),
-        Line::from("  text:Your inline text"),
-        Line::from("  git:diff --base=main"),
-        Line::from(""), separator(), input_line(&app.input_buffer), separator(), Line::from(""),
-        Line::from(Span::styled("Enter to confirm, Esc to cancel", dim())),
+        Line::from(Span::styled(prompt, bold(Color::Cyan))),
+        Line::from(""),
     ];
-    f.render_widget(
-        Paragraph::new(lines).block(Block::default().title(" Add Artifact ").borders(Borders::ALL).style(Style::default().bg(Color::Black))).wrap(Wrap { trim: true }),
-        area,
-    );
+
+    if !examples.is_empty() {
+        lines.push(Line::from(Span::styled("Examples:", dim())));
+        for ex in examples { lines.push(Line::from(format!("  {}", ex))); }
+        lines.push(Line::from(""));
+    }
+
+    // Input box with clear visual borders
+    lines.push(Line::from(Span::styled("┌────────────────────────────────────────────────────────┐", Style::default().fg(Color::Green))));
+    lines.push(Line::from(vec![
+        Span::styled("│ ", Style::default().fg(Color::Green)),
+        Span::styled(input, Style::default().fg(Color::White).bg(Color::DarkGray)),
+        Span::styled("█", Style::default().fg(Color::Yellow).add_modifier(Modifier::SLOW_BLINK)),
+        Span::raw(" ".repeat(55_usize.saturating_sub(input.len()))),
+        Span::styled("│", Style::default().fg(Color::Green)),
+    ]));
+    lines.push(Line::from(Span::styled("└────────────────────────────────────────────────────────┘", Style::default().fg(Color::Green))));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled("Enter to confirm, Esc to cancel", dim())));
+
+    let block = Block::default()
+        .title(format!(" {} ", title))
+        .title_style(bold(Color::White))
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan))
+        .style(Style::default().bg(Color::Black));
+
+    f.render_widget(Paragraph::new(lines).block(block).wrap(Wrap { trim: false }), area);
+}
+
+fn draw_add_artifact_dialog(f: &mut Frame, app: &App) {
+    draw_input_dialog(f, "Add Artifact", "Enter artifact URI:", &["file:path/to/file", "glob:src/**/*.rs", "text:Your inline text", "git:diff --base=main"], &app.input_buffer);
 }
 
 fn draw_create_pack_dialog(f: &mut Frame, app: &App) {
-    let area = centered_rect(60, 18, f.area());
-    let lines = vec![
-        Line::from(Span::styled("Enter pack name or name:budget", bold(Color::Cyan))),
-        Line::from(""),
-        Line::from(Span::styled("Examples:", dim())),
-        Line::from("  my-pack          (default 128k)"),
-        Line::from("  my-pack:50000    (custom)"),
-        Line::from(""), separator(), input_line(&app.input_buffer), separator(), Line::from(""),
-        Line::from(Span::styled("Enter to confirm, Esc to cancel", dim())),
-    ];
-    f.render_widget(
-        Paragraph::new(lines).block(Block::default().title(" Create Pack ").borders(Borders::ALL).style(Style::default().bg(Color::Black))).wrap(Wrap { trim: true }),
-        area,
-    );
+    draw_input_dialog(f, "Create Pack", "Enter pack name or name:budget:", &["my-pack          (default 128k)", "my-pack:50000    (custom budget)"], &app.input_buffer);
 }
 
 fn draw_edit_budget_dialog(f: &mut Frame, app: &App) {
-    let area = centered_rect(50, 15, f.area());
     let (name, budget) = app.packs.get(app.selected_pack_index)
         .map(|p| (p.name.as_str(), p.policies.budget_tokens))
         .unwrap_or(("unknown", 0));
-
-    let lines = vec![
-        Line::from(vec![Span::raw("Current: "), Span::styled(budget.to_string(), Style::default().fg(Color::Cyan))]),
-        Line::from(""),
-        Line::from(Span::styled("Enter new budget:", bold(Color::Cyan))),
-        Line::from(""), separator(), input_line(&app.input_buffer), separator(), Line::from(""),
-        Line::from(Span::styled("Enter to confirm, Esc to cancel", dim())),
-    ];
-    f.render_widget(
-        Paragraph::new(lines).block(Block::default().title(format!(" Edit Budget: {} ", name)).borders(Borders::ALL).style(Style::default().bg(Color::Black))).wrap(Wrap { trim: true }),
-        area,
-    );
+    draw_input_dialog(f, &format!("Edit Budget: {}", name), &format!("Current: {}. Enter new budget:", budget), &[], &app.input_buffer);
 }
 
 fn draw_confirm_delete_dialog(f: &mut Frame, app: &App) {
-    let area = centered_rect(50, 12, f.area());
+    let area = centered_rect(50, 10, f.area());
+    f.render_widget(Clear, area);
     let name = app.packs.get(app.selected_pack_index).map(|p| p.name.as_str()).unwrap_or("unknown");
     let lines = vec![
         Line::from(""),
@@ -297,7 +303,9 @@ fn draw_confirm_delete_dialog(f: &mut Frame, app: &App) {
 }
 
 fn draw_help_screen(f: &mut Frame) {
-    let area = centered_rect(80, 85, f.area());
+    let frame = f.area();
+    let area = centered_rect(frame.width.saturating_sub(10), frame.height.saturating_sub(6), frame);
+    f.render_widget(Clear, area);
     let sections = [
         ("Navigation", vec!["j/k ↓/↑  Navigate", "Space/Enter  Expand pack", "Tab  Switch focus"]),
         ("Pack", vec!["c  Create", "e  Edit budget", "D  Delete", "r  Refresh"]),
@@ -323,7 +331,8 @@ fn draw_help_screen(f: &mut Frame) {
 }
 
 fn draw_loading_indicator(f: &mut Frame, app: &App) {
-    let area = centered_rect(40, 10, f.area());
+    let area = centered_rect(40, 7, f.area());
+    f.render_widget(Clear, area);
     let msg = app.loading_message.as_deref().unwrap_or("");
     let lines = vec![
         Line::from(""),
@@ -338,7 +347,8 @@ fn draw_loading_indicator(f: &mut Frame, app: &App) {
 }
 
 fn draw_file_browser(f: &mut Frame, app: &App) {
-    let area = centered_rect(90, 85, f.area());
+    let frame = f.area();
+    let area = centered_rect(frame.width.saturating_sub(6), frame.height.saturating_sub(4), frame);
     f.render_widget(Clear, area);
 
     let chunks = Layout::default()
@@ -381,12 +391,7 @@ fn draw_file_browser(f: &mut Frame, app: &App) {
         Line::from(""),
     ];
 
-    if browser.is_text_mode() {
-        info.extend([
-            Line::from(Span::styled("Text Mode", bold(Color::Yellow))),
-            Line::from("Press Space for text input"),
-        ]);
-    } else if let Some(e) = browser.selected_entry() {
+    if let Some(e) = browser.selected_entry() {
         info.extend([
             Line::from(Span::styled("Selected:", bold(Color::Cyan))),
             Line::from(e.name.clone()),
@@ -400,18 +405,17 @@ fn draw_file_browser(f: &mut Frame, app: &App) {
     }
 
     info.extend([Line::from(""), separator(), Line::from("")]);
-    for (key, desc) in [("j/k", "Navigate"), ("Enter/l", "Enter"), ("h/Back", "Up"), ("Tab", "Type"), (".", "Hidden"), ("Space", "Confirm"), ("i", "Text"), ("Esc", "Cancel")] {
+    for (key, desc) in [("j/k", "Navigate"), ("Enter/l", "Enter"), ("h/Back", "Up"), ("Tab", "Type"), (".", "Hidden"), ("Space", "Confirm"), ("Esc", "Cancel")] {
         info.push(Line::from(vec![Span::styled(key, Style::default().fg(Color::Yellow)), Span::raw(format!(" {}", desc))]));
     }
 
     f.render_widget(Paragraph::new(info).block(Block::default().borders(Borders::ALL).title(" Info ")).wrap(Wrap { trim: true }), chunks[1]);
 }
 
-fn centered_rect(px: u16, py: u16, r: Rect) -> Rect {
-    let v = Layout::default().direction(Direction::Vertical)
-        .constraints([Constraint::Percentage((100 - py) / 2), Constraint::Percentage(py), Constraint::Percentage((100 - py) / 2)])
-        .split(r);
-    Layout::default().direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage((100 - px) / 2), Constraint::Percentage(px), Constraint::Percentage((100 - px) / 2)])
-        .split(v[1])[1]
+fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {
+    let w = width.min(r.width);
+    let h = height.min(r.height);
+    let x = r.x + (r.width.saturating_sub(w)) / 2;
+    let y = r.y + (r.height.saturating_sub(h)) / 2;
+    Rect::new(x, y, w, h)
 }

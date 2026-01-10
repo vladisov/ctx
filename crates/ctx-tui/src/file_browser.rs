@@ -8,25 +8,14 @@ pub enum ArtifactTypeSelection {
     File,
     Glob,
     GitDiff,
-    Text,
 }
 
 impl ArtifactTypeSelection {
-    pub fn next(&self) -> Self {
-        match self {
-            Self::File => Self::Glob,
-            Self::Glob => Self::GitDiff,
-            Self::GitDiff => Self::Text,
-            Self::Text => Self::File,
-        }
-    }
-
     pub fn label(&self) -> &str {
         match self {
             Self::File => "file:",
             Self::Glob => "glob:",
             Self::GitDiff => "git:diff",
-            Self::Text => "text:",
         }
     }
 }
@@ -155,7 +144,11 @@ impl FileBrowser {
     }
 
     pub fn cycle_artifact_type(&mut self) {
-        self.artifact_type = self.artifact_type.next();
+        self.artifact_type = match self.artifact_type {
+            ArtifactTypeSelection::File => ArtifactTypeSelection::Glob,
+            ArtifactTypeSelection::Glob => ArtifactTypeSelection::GitDiff,
+            ArtifactTypeSelection::GitDiff => ArtifactTypeSelection::File,
+        };
     }
 
     pub fn get_selected_uri(&self) -> Option<String> {
@@ -174,12 +167,7 @@ impl FileBrowser {
                 }
             }
             ArtifactTypeSelection::GitDiff => Some("git:diff --base=main".to_string()),
-            ArtifactTypeSelection::Text => None,
         }
-    }
-
-    pub fn is_text_mode(&self) -> bool {
-        self.artifact_type == ArtifactTypeSelection::Text
     }
 
     pub fn selected_entry(&self) -> Option<&FileEntry> {

@@ -68,6 +68,12 @@ impl App {
         self.content_scroll = 0;
     }
 
+    pub fn exit_content_view(&mut self) {
+        self.artifact_content = None;
+        self.content_scroll = 0;
+        self.preview_mode = PreviewMode::Stats;
+    }
+
     fn selected_pack(&self) -> Option<&Pack> {
         self.packs.get(self.selected_pack_index)
     }
@@ -208,8 +214,20 @@ impl App {
         self.content_scroll = 0;
     }
 
-    pub fn scroll_content_up(&mut self) { self.content_scroll = self.content_scroll.saturating_sub(1); }
-    pub fn scroll_content_down(&mut self) { self.content_scroll += 1; }
+    pub fn is_viewing_content(&self) -> bool {
+        self.artifact_content.is_some() || self.preview_mode == PreviewMode::Content
+    }
+
+    pub fn navigate_or_scroll_down(&mut self) {
+        if self.is_viewing_content() { self.content_scroll += 1; }
+        else { self.next(); }
+    }
+
+    pub fn navigate_or_scroll_up(&mut self) {
+        if self.is_viewing_content() { self.content_scroll = self.content_scroll.saturating_sub(1); }
+        else { self.previous(); }
+    }
+
     pub fn scroll_page_up(&mut self) { self.content_scroll = self.content_scroll.saturating_sub(10); }
     pub fn scroll_page_down(&mut self) { self.content_scroll += 10; }
 
@@ -266,19 +284,7 @@ impl App {
     pub fn browser_toggle_hidden(&mut self) -> Result<()> { self.file_browser.as_mut().map(|b| b.toggle_hidden()).transpose()?; Ok(()) }
     pub fn browser_cycle_type(&mut self) { if let Some(b) = &mut self.file_browser { b.cycle_artifact_type(); } }
 
-    pub fn browser_switch_to_text_input(&mut self) {
-        self.file_browser = None;
-        self.input_mode = InputMode::AddingArtifact;
-        self.input_buffer.clear();
-    }
-
     pub async fn browser_confirm_selection(&mut self) -> Result<()> {
-        if self.file_browser.as_ref().map(|b| b.is_text_mode()).unwrap_or(false) {
-            self.browser_switch_to_text_input();
-            self.status_message = Some("Text mode: type your content".into());
-            return Ok(());
-        }
-
         let uri = self.file_browser.as_ref().and_then(|b| b.get_selected_uri());
         if let Some(uri) = uri {
             self.input_buffer = uri;
