@@ -83,9 +83,11 @@ mod tests {
         });
 
         let result = call_tool(&server, &params).await.unwrap();
-        assert!(result.is_array());
 
-        let packs = result.as_array().unwrap();
+        // Extract text from MCP content format
+        let text = result["content"][0]["text"].as_str().unwrap();
+        let packs: Vec<serde_json::Value> = serde_json::from_str(text).unwrap();
+
         assert_eq!(packs.len(), 1);
     }
 
@@ -112,8 +114,13 @@ mod tests {
         });
 
         let result = call_tool(&server, &params).await.unwrap();
-        assert!(result.is_object());
-        assert_eq!(result["name"], "my-pack");
+
+        // Extract text from MCP content format
+        let text = result["content"][0]["text"].as_str().unwrap();
+        let pack_data: serde_json::Value = serde_json::from_str(text).unwrap();
+
+        assert!(pack_data.is_object());
+        assert_eq!(pack_data["name"], "my-pack");
     }
 
     #[tokio::test]
@@ -173,9 +180,14 @@ mod tests {
         });
 
         let result = call_tool(&server, &params).await.unwrap();
-        assert!(result.is_object());
-        assert!(result["render_hash"].is_string());
-        assert!(result["token_estimate"].is_number());
+
+        // Extract text from MCP content format
+        let text = result["content"][0]["text"].as_str().unwrap();
+        let preview_data: serde_json::Value = serde_json::from_str(text).unwrap();
+
+        assert!(preview_data.is_object());
+        assert!(preview_data["render_hash"].is_string());
+        assert!(preview_data["token_estimate"].is_number());
     }
 
     #[tokio::test]
