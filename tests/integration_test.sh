@@ -10,6 +10,8 @@ if ! [ -f "$CTX" ]; then
     echo "Or set CTX=/path/to/binary"
     exit 1
 fi
+# Convert to absolute path for tests that change directory
+CTX="$(cd "$(dirname "$CTX")" && pwd)/$(basename "$CTX")"
 
 # Setup isolated test environment
 TEST_DIR=$(mktemp -d)
@@ -96,6 +98,97 @@ else
     echo "✗ Pack listing"
     exit 1
 fi
+
+# Test 11: ctx init
+echo "ctx init"
+PROJECT_DIR="$TEST_DIR/test-project"
+mkdir -p "$PROJECT_DIR"
+cd "$PROJECT_DIR"
+echo "# Test README" > README.md
+echo "fn main() {}" > main.rs
+if $CTX init 2>&1 | grep -q "ctx.toml"; then
+    echo "✓ ctx init"
+else
+    echo "✗ ctx init"
+    exit 1
+fi
+
+# Test 12: ctx.toml exists
+echo "ctx.toml created"
+if [ -f "$PROJECT_DIR/ctx.toml" ]; then
+    echo "✓ ctx.toml created"
+else
+    echo "✗ ctx.toml created"
+    exit 1
+fi
+
+# Test 13: ctx pack sync
+echo "ctx pack sync"
+cat > "$PROJECT_DIR/ctx.toml" << 'TOML'
+[config]
+default_budget = 50000
+
+[packs.project-docs]
+budget = 25000
+artifacts = [
+    { source = "file:README.md", priority = 10 },
+]
+
+[packs.project-code]
+artifacts = [
+    { source = "file:main.rs", priority = 0 },
+]
+TOML
+if $CTX pack sync 2>&1 | grep -q "Synced 2 pack"; then
+    echo "✓ ctx pack sync"
+else
+    echo "✗ ctx pack sync"
+    exit 1
+fi
+
+# Test 14: Namespaced packs exist
+echo "Namespaced packs"
+if $CTX pack list 2>&1 | grep -q "test-project:project-docs"; then
+    echo "✓ Namespaced packs"
+else
+    echo "✗ Namespaced packs"
+    exit 1
+fi
+
+# Test 15: Preview namespaced pack
+echo "Preview namespaced pack"
+if $CTX pack preview "test-project:project-docs" 2>&1 | grep -q "/ 25000"; then
+    echo "✓ Preview namespaced pack"
+else
+    # Try showing the output for debugging
+    $CTX pack preview "test-project:project-docs" 2>&1 || true
+    echo "✗ Preview namespaced pack"
+    exit 1
+fi
+
+# Test 16: ctx pack save
+echo "ctx pack save"
+# Create a new pack and save it
+$CTX pack create test-project:new-pack --tokens 10000 >/dev/null 2>&1
+$CTX pack add "test-project:new-pack" "file:README.md" >/dev/null 2>&1
+if $CTX pack save "test-project:new-pack" 2>&1 | grep -q "Saved 1 pack"; then
+    echo "✓ ctx pack save"
+else
+    echo "✗ ctx pack save"
+    exit 1
+fi
+
+# Test 17: Saved pack in ctx.toml
+echo "Pack saved to ctx.toml"
+if grep -q "new-pack" "$PROJECT_DIR/ctx.toml"; then
+    echo "✓ Pack saved to ctx.toml"
+else
+    echo "✗ Pack saved to ctx.toml"
+    exit 1
+fi
+
+# Return to original directory
+cd - >/dev/null
 
 echo ""
 echo "=== All tests passed! ==="
