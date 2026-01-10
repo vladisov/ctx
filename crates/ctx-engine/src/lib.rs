@@ -35,6 +35,7 @@ impl Renderer {
             included: Vec::new(),
             excluded: Vec::new(),
             redactions: Vec::new(),
+            warnings: Vec::new(),
             render_hash: String::new(),
             payload: Some(String::new()),
         };
@@ -48,6 +49,7 @@ impl Renderer {
             combined_result.included.extend(result.included);
             combined_result.excluded.extend(result.excluded);
             combined_result.redactions.extend(result.redactions);
+            combined_result.warnings.extend(result.warnings);
 
             if let Some(payload) = result.payload {
                 if let Some(ref mut existing) = combined_result.payload {
@@ -82,13 +84,33 @@ impl Renderer {
         // 3. Expand and Load Artifacts
         let mut processed_artifacts = Vec::new();
         let mut redaction_infos = Vec::new();
+        let mut warnings = Vec::new();
 
         for item in pack_artifacts {
             let artifacts = self.expand_artifact(&item.artifact).await?;
 
             for artifact in artifacts {
-                // Load content
-                let content = self.source_registry.load(&artifact).await?;
+                // Try to load content from disk first, fall back to cached content
+                let content = match self.source_registry.load(&artifact).await {
+                    Ok(content) => content,
+                    Err(e) => {
+                        // Try to load from cached blob storage
+                        if artifact.content_hash.is_some() {
+                            match self.storage.load_artifact_content(&artifact).await {
+                                Ok(cached) => {
+                                    warnings.push(format!(
+                                        "File not found at '{}', using cached content: {}",
+                                        artifact.source_uri, e
+                                    ));
+                                    cached
+                                }
+                                Err(_) => return Err(e.into()),
+                            }
+                        } else {
+                            return Err(e.into());
+                        }
+                    }
+                };
 
                 // Redact
                 let (redacted_content, infos) = self.redactor.redact(&artifact.id, &content);
@@ -107,9 +129,12 @@ impl Renderer {
         }
 
         // 4. Render
-        Ok(self
-            .render_engine
-            .render(processed_artifacts, policy.budget_tokens, redaction_infos)?)
+        Ok(self.render_engine.render(
+            processed_artifacts,
+            policy.budget_tokens,
+            redaction_infos,
+            warnings,
+        )?)
     }
 
     async fn expand_artifact(

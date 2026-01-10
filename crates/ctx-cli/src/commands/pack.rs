@@ -227,6 +227,13 @@ async fn preview(
         }
     }
 
+    if !result.warnings.is_empty() {
+        println!("\n⚠ Warnings ({}):", result.warnings.len());
+        for warning in &result.warnings {
+            println!("  - {}", warning);
+        }
+    }
+
     if show_redactions && !result.redactions.is_empty() {
         println!("\nRedactions:");
         for summary in &result.redactions {

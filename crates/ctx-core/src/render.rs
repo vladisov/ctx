@@ -15,6 +15,7 @@ pub struct RenderResult {
     pub included: Vec<ArtifactSummary>,
     pub excluded: Vec<ExclusionInfo>,
     pub redactions: Vec<RedactionSummary>,
+    pub warnings: Vec<String>,
     pub render_hash: String,
     pub payload: Option<String>,
 }
@@ -83,6 +84,7 @@ impl RenderEngine {
         artifacts: Vec<ProcessedArtifact>,
         budget_tokens: usize,
         redaction_info: Vec<ctx_security::RedactionInfo>,
+        warnings: Vec<String>,
     ) -> Result<RenderResult> {
         // Apply budget - keep artifacts until we hit budget (caller pre-sorts by priority)
         let (included, excluded) = self.apply_budget(artifacts, budget_tokens);
@@ -108,6 +110,7 @@ impl RenderEngine {
                 .map(|(a, reason)| a.exclusion(reason.clone()))
                 .collect(),
             redactions,
+            warnings,
             render_hash,
             payload: Some(payload),
         })
@@ -251,8 +254,8 @@ mod tests {
             create_test_artifact("b", "content b", 100),
         ];
 
-        let result1 = engine.render(artifacts1, 1000, vec![]).unwrap();
-        let result2 = engine.render(artifacts2, 1000, vec![]).unwrap();
+        let result1 = engine.render(artifacts1, 1000, vec![], vec![]).unwrap();
+        let result2 = engine.render(artifacts2, 1000, vec![], vec![]).unwrap();
 
         // Same inputs should produce same hash
         assert_eq!(result1.render_hash, result2.render_hash);
