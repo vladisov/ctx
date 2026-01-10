@@ -1,4 +1,4 @@
-use ctx_core::{Artifact, Error, Pack, Result, Snapshot};
+use ctx_core::{Artifact, Error, Pack, Result};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 use sqlx::Row;
 use std::path::PathBuf;
@@ -130,32 +130,6 @@ impl Storage {
         })?;
 
         Ok(())
-    }
-
-    pub async fn get_pack_by_name(&self, name: &str) -> Result<Pack> {
-        let row = sqlx::query(
-            "SELECT pack_id, name, policies_json, created_at, updated_at FROM packs WHERE name = ?",
-        )
-        .bind(name)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| Error::Database(format!("Failed to fetch pack by name '{}': {}", name, e)))?
-        .ok_or_else(|| Error::PackNotFound(name.to_string()))?;
-
-        self.row_to_pack(row)
-    }
-
-    pub async fn get_pack_by_id(&self, id: &str) -> Result<Pack> {
-        let row = sqlx::query(
-            "SELECT pack_id, name, policies_json, created_at, updated_at FROM packs WHERE pack_id = ?",
-        )
-        .bind(id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| Error::Database(format!("Failed to fetch pack by id '{}': {}", id, e)))?
-        .ok_or_else(|| Error::PackNotFound(id.to_string()))?;
-
-        self.row_to_pack(row)
     }
 
     pub async fn list_packs(&self) -> Result<Vec<Pack>> {
@@ -425,51 +399,6 @@ impl Storage {
         Ok(items)
     }
 
-    // Snapshot operations
-    pub async fn create_snapshot(&self, snapshot: &Snapshot) -> Result<()> {
-        sqlx::query(
-            "INSERT INTO snapshots (snapshot_id, label, render_hash, payload_hash, created_at)
-             VALUES (?, ?, ?, ?, ?)",
-        )
-        .bind(&snapshot.id)
-        .bind(&snapshot.label)
-        .bind(&snapshot.render_hash)
-        .bind(&snapshot.payload_hash)
-        .bind(snapshot.created_at.unix_timestamp())
-        .execute(&self.pool)
-        .await
-        .map_err(|e| Error::Database(e.to_string()))?;
-
-        Ok(())
-    }
-
-    pub async fn get_snapshot(&self, id: &str) -> Result<Snapshot> {
-        let row = sqlx::query(
-            "SELECT snapshot_id, label, render_hash, payload_hash, created_at
-             FROM snapshots WHERE snapshot_id = ?",
-        )
-        .bind(id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| Error::Database(e.to_string()))?
-        .ok_or_else(|| Error::SnapshotNotFound(id.to_string()))?;
-
-        let id: String = row.get("snapshot_id");
-        let label: Option<String> = row.get("label");
-        let render_hash: String = row.get("render_hash");
-        let payload_hash: String = row.get("payload_hash");
-        let created_at: i64 = row.get("created_at");
-
-        Ok(Snapshot {
-            id,
-            label,
-            render_hash,
-            payload_hash,
-            created_at: time::OffsetDateTime::from_unix_timestamp(created_at)
-                .map_err(|e| Error::Other(e.into()))?,
-        })
-    }
-
     /// Delete a pack and all its associations (artifacts remain for deduplication)
     pub async fn delete_pack(&self, pack_id: &str) -> Result<()> {
         let result = sqlx::query("DELETE FROM packs WHERE pack_id = ?")
@@ -484,53 +413,12 @@ impl Storage {
 
         Ok(())
     }
-
-    /// List all snapshots, optionally filtered by render_hash
-    pub async fn list_snapshots(&self, render_hash: Option<&str>) -> Result<Vec<Snapshot>> {
-        let rows = if let Some(hash) = render_hash {
-            sqlx::query(
-                "SELECT snapshot_id, label, render_hash, payload_hash, created_at
-                 FROM snapshots WHERE render_hash = ? ORDER BY created_at DESC",
-            )
-            .bind(hash)
-            .fetch_all(&self.pool)
-            .await
-        } else {
-            sqlx::query(
-                "SELECT snapshot_id, label, render_hash, payload_hash, created_at
-                 FROM snapshots ORDER BY created_at DESC",
-            )
-            .fetch_all(&self.pool)
-            .await
-        }
-        .map_err(|e| Error::Database(e.to_string()))?;
-
-        let mut snapshots = Vec::new();
-        for row in rows {
-            let id: String = row.get("snapshot_id");
-            let label: Option<String> = row.get("label");
-            let render_hash: String = row.get("render_hash");
-            let payload_hash: String = row.get("payload_hash");
-            let created_at: i64 = row.get("created_at");
-
-            snapshots.push(Snapshot {
-                id,
-                label,
-                render_hash,
-                payload_hash,
-                created_at: time::OffsetDateTime::from_unix_timestamp(created_at)
-                    .map_err(|e| Error::Other(e.into()))?,
-            });
-        }
-
-        Ok(snapshots)
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ctx_core::{Artifact, ArtifactType, Pack, RenderPolicy, Snapshot};
+    use ctx_core::{Artifact, ArtifactType, Pack, RenderPolicy};
 
     async fn create_test_storage() -> Storage {
         let test_dir =
@@ -549,12 +437,12 @@ mod tests {
         storage.create_pack(&pack).await.unwrap();
 
         // Get pack by name
-        let retrieved = storage.get_pack_by_name("test-pack").await.unwrap();
+        let retrieved = storage.get_pack("test-pack").await.unwrap();
         assert_eq!(retrieved.id, pack.id);
         assert_eq!(retrieved.name, "test-pack");
 
         // Get pack by ID
-        let retrieved_by_id = storage.get_pack_by_id(&pack.id).await.unwrap();
+        let retrieved_by_id = storage.get_pack(&pack.id).await.unwrap();
         assert_eq!(retrieved_by_id.name, "test-pack");
 
         // List packs
@@ -691,35 +579,6 @@ mod tests {
         // Verify content can be loaded
         let loaded = storage.load_artifact_content(&retrieved).await.unwrap();
         assert_eq!(loaded, content);
-    }
-
-    #[tokio::test]
-    async fn test_snapshot_operations() {
-        let storage = create_test_storage().await;
-
-        // Create snapshot
-        let snapshot = Snapshot::new(
-            "render-hash-123".to_string(),
-            "payload-hash-456".to_string(),
-            Some("v1.0".to_string()),
-        );
-        storage.create_snapshot(&snapshot).await.unwrap();
-
-        // Retrieve snapshot
-        let retrieved = storage.get_snapshot(&snapshot.id).await.unwrap();
-        assert_eq!(retrieved.id, snapshot.id);
-        assert_eq!(retrieved.label, Some("v1.0".to_string()));
-        assert_eq!(retrieved.render_hash, "render-hash-123");
-        assert_eq!(retrieved.payload_hash, "payload-hash-456");
-    }
-
-    #[tokio::test]
-    async fn test_snapshot_not_found() {
-        let storage = create_test_storage().await;
-
-        let result = storage.get_snapshot("nonexistent-id").await;
-        assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), Error::SnapshotNotFound(_)));
     }
 
     #[tokio::test]

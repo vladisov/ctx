@@ -127,16 +127,6 @@ pub enum PackCommands {
         show_payload: bool,
     },
 
-    /// Create a snapshot of a pack
-    Snapshot {
-        /// Pack name or ID
-        pack: String,
-
-        /// Optional label for the snapshot
-        #[arg(long)]
-        label: Option<String>,
-    },
-
     /// Delete a pack
     Delete {
         /// Pack name or ID
@@ -145,12 +135,6 @@ pub enum PackCommands {
         /// Skip confirmation prompt
         #[arg(long)]
         force: bool,
-    },
-
-    /// List snapshots for a pack
-    Snapshots {
-        /// Pack name or ID
-        pack: String,
     },
 
     /// Sync packs from ctx.toml to database

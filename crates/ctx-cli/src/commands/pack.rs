@@ -1,6 +1,6 @@
 use anyhow::Result;
 use ctx_config::{ArtifactDefinition, Config, PackDefinition, ProjectConfig};
-use ctx_core::{OrderingStrategy, Pack, RenderPolicy, Snapshot};
+use ctx_core::{OrderingStrategy, Pack, RenderPolicy};
 use ctx_engine::Renderer;
 use ctx_sources::{Denylist, SourceHandlerRegistry, SourceOptions};
 use ctx_storage::Storage;
@@ -40,9 +40,7 @@ pub async fn handle(cmd: PackCommands, storage: &Storage, config: &Config) -> Re
             redactions,
             show_payload,
         } => preview(storage, pack, tokens, redactions, show_payload).await,
-        PackCommands::Snapshot { pack, label } => snapshot(storage, pack, label).await,
         PackCommands::Delete { pack, force } => delete(storage, pack, force).await,
-        PackCommands::Snapshots { pack } => snapshots(storage, pack).await,
         PackCommands::Sync => sync(storage, config, &denylist).await,
         PackCommands::Save { packs, all } => save(storage, packs, all).await,
     }
@@ -268,26 +266,6 @@ async fn preview(
     Ok(())
 }
 
-async fn snapshot(storage: &Storage, pack_name: String, label: Option<String>) -> Result<()> {
-    let renderer = Renderer::new(storage.clone());
-    let pack = storage.get_pack(&pack_name).await?;
-
-    println!("Creating snapshot for pack: {}...", pack.name);
-
-    let result = renderer.render_pack(&pack.id, None).await?;
-    let payload = result.payload.unwrap_or_default();
-    let payload_hash = blake3::hash(payload.as_bytes()).to_hex().to_string();
-
-    let snapshot = Snapshot::new(result.render_hash.clone(), payload_hash, label);
-
-    storage.create_snapshot(&snapshot).await?;
-
-    println!("✓ Snapshot created: {}", snapshot.id);
-    println!("  Render Hash: {}", snapshot.render_hash);
-
-    Ok(())
-}
-
 async fn delete(storage: &Storage, pack_name: String, force: bool) -> Result<()> {
     let pack = storage.get_pack(&pack_name).await?;
 
@@ -306,38 +284,6 @@ async fn delete(storage: &Storage, pack_name: String, force: bool) -> Result<()>
 
     storage.delete_pack(&pack.id).await?;
     println!("✓ Deleted pack: {}", pack.name);
-
-    Ok(())
-}
-
-async fn snapshots(storage: &Storage, pack_name: String) -> Result<()> {
-    let pack = storage.get_pack(&pack_name).await?;
-    let renderer = Renderer::new(storage.clone());
-
-    // Get current render hash to find matching snapshots
-    let result = renderer.render_pack(&pack.id, None).await?;
-    let current_hash = &result.render_hash;
-
-    let all_snapshots = storage.list_snapshots(Some(current_hash)).await?;
-
-    if all_snapshots.is_empty() {
-        println!(
-            "No snapshots for pack '{}' (current render_hash: {})",
-            pack.name,
-            &current_hash[..12]
-        );
-        return Ok(());
-    }
-
-    println!(
-        "Snapshots for pack '{}' ({} total):",
-        pack.name,
-        all_snapshots.len()
-    );
-    for snap in all_snapshots {
-        let label = snap.label.unwrap_or_else(|| "(no label)".to_string());
-        println!("  {} - {} ({})", &snap.id[..8], label, snap.created_at);
-    }
 
     Ok(())
 }

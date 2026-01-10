@@ -39,30 +39,6 @@ pub async fn call_tool(
 
             serde_json::to_string_pretty(&result)?
         }
-        "ctx_packs_snapshot" => {
-            let pack_ids: Vec<String> = serde_json::from_value(args["packs"].clone())?;
-            let label = args["label"].as_str().map(String::from);
-
-            let result = server
-                .renderer
-                .render_request(RenderRequest { pack_ids })
-                .await?;
-
-            let snapshot = ctx_core::Snapshot::new(
-                result.render_hash.clone(),
-                blake3::hash(result.payload.clone().unwrap_or_default().as_bytes())
-                    .to_hex()
-                    .to_string(),
-                label,
-            );
-
-            server.db.create_snapshot(&snapshot).await?;
-
-            format!(
-                "Snapshot created: {}\nRender hash: {}",
-                snapshot.id, snapshot.render_hash
-            )
-        }
         "ctx_packs_create" => {
             if server.read_only {
                 anyhow::bail!("Server is in read-only mode");
@@ -185,18 +161,6 @@ pub fn list_tools(read_only: bool) -> serde_json::Value {
                         "description": "Pack names or IDs to render"
                     },
                     "show_payload": {"type": "boolean", "default": false, "description": "Include rendered content"}
-                },
-                "required": ["packs"]
-            }),
-        ),
-        tool_schema(
-            "ctx_packs_snapshot",
-            "Create immutable snapshot of rendered packs",
-            json!({
-                "type": "object",
-                "properties": {
-                    "packs": {"type": "array", "items": {"type": "string"}, "description": "Pack names or IDs"},
-                    "label": {"type": "string", "description": "Optional label for snapshot"}
                 },
                 "required": ["packs"]
             }),

@@ -2,7 +2,6 @@ pub mod artifact;
 pub mod error;
 pub mod pack;
 pub mod render;
-pub mod snapshot;
 
 pub use artifact::{Artifact, ArtifactMetadata, ArtifactType};
 pub use error::{Error, Result};
@@ -11,7 +10,6 @@ pub use render::{
     ArtifactSummary, ExclusionInfo, ProcessedArtifact, RedactionSummary, RenderEngine,
     RenderRequest, RenderResult,
 };
-pub use snapshot::{RenderItemMetadata, Snapshot, SnapshotItem};
 
 #[cfg(test)]
 mod tests {
@@ -37,18 +35,5 @@ mod tests {
 
         assert!(!artifact.id.is_empty());
         assert_eq!(artifact.source_uri, "file:/test/file.txt");
-    }
-
-    #[test]
-    fn test_snapshot_creation() {
-        let snapshot = Snapshot::new(
-            "render-hash-123".to_string(),
-            "payload-hash-456".to_string(),
-            Some("v1.0".to_string()),
-        );
-
-        assert!(!snapshot.id.is_empty());
-        assert_eq!(snapshot.label, Some("v1.0".to_string()));
-        assert_eq!(snapshot.render_hash, "render-hash-123");
     }
 }

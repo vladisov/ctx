@@ -55,7 +55,7 @@ High-level overview of ctx's design and implementation.
 
 ### `ctx-core` (Domain Models)
 - **Purpose**: Core data structures
-- **Key types**: `Pack`, `Artifact`, `Snapshot`, `RenderPolicy`, `ArtifactType`
+- **Key types**: `Pack`, `Artifact`, `RenderPolicy`, `ArtifactType`
 - **Responsibilities**: Domain logic, serialization
 - **Lines**: ~250
 
@@ -99,7 +99,7 @@ High-level overview of ctx's design and implementation.
 ### `ctx-mcp` (MCP Server)
 - **Purpose**: JSON-RPC 2.0 server for AI agents
 - **Protocol**: Model Context Protocol (2024-11-05)
-- **Tools**: `ctx_packs_list`, `ctx_packs_get`, `ctx_packs_preview`, `ctx_packs_snapshot`
+- **Tools**: `ctx_packs_list`, `ctx_packs_get`, `ctx_packs_preview`, `ctx_packs_create`, `ctx_packs_add_artifact`, `ctx_packs_delete`
 - **Server**: Axum on port 17373
 - **Protocol Methods**: `initialize`, `initialized`, `ping`, `tools/list`, `tools/call`
 - **Transport**: HTTP with CORS support
@@ -164,18 +164,6 @@ User: ctx pack preview demo
   └─> Display RenderResult
 ```
 
-### Snapshot
-```
-User: ctx pack snapshot demo --label "v1.0"
-  │
-  ├─> Renderer.render_pack(pack_id)
-  ├─> Create Snapshot object
-  │     ├─> render_hash (from render result)
-  │     ├─> payload_hash (BLAKE3 of payload)
-  │     └─> label
-  └─> Storage.create_snapshot() → SQLite INSERT
-```
-
 ---
 
 ## Storage Schema
@@ -212,17 +200,6 @@ PRIMARY KEY (pack_id, artifact_id)
 FOREIGN KEY (pack_id) REFERENCES packs ON DELETE CASCADE
 FOREIGN KEY (artifact_id) REFERENCES artifacts ON DELETE CASCADE
 INDEX ON (pack_id, priority DESC, added_at ASC)  -- Query optimization
-```
-
-**snapshots**
-```sql
-snapshot_id TEXT PRIMARY KEY
-label TEXT
-render_hash TEXT
-payload_hash TEXT
-created_at INTEGER
-INDEX ON (render_hash)
-INDEX ON (created_at DESC)
 ```
 
 ### Blob Storage
@@ -419,7 +396,7 @@ fn create_test_artifact(id: &str, content: &str, tokens: usize) -> ProcessedArti
 
 - **Lines of code**: ~2,800 (Rust)
 - **Crates**: 9
-- **Commands**: 8 (create, list, show, add, remove, preview, snapshot, mcp)
+- **Commands**: 9 (create, list, show, add, remove, preview, delete, sync, save, mcp)
 - **Source handlers**: 4 (file, text, collection, git)
 - **Artifact types**: 7 (File, FileRange, Text, Markdown, CollectionMdDir, CollectionGlob, GitDiff)
 - **Performance**: <200ms typical operation

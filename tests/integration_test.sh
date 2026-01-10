@@ -63,10 +63,7 @@ test_cmd "Denylist blocks .env" "pack add test-pack file:$TEST_DIR/.env" "denied
 # Test 6: Preview pack
 test_cmd "Preview pack" "pack preview test-pack --tokens" "render_hash:"
 
-# Test 7: Snapshot
-test_cmd "Create snapshot" "pack snapshot test-pack --label test-snap" "Snapshot created:"
-
-# Test 8: Deterministic rendering
+# Test 7: Deterministic rendering
 echo "Deterministic rendering"
 HASH1=$($CTX pack preview test-pack 2>&1 | grep "render_hash:" | awk '{print $2}')
 HASH2=$($CTX pack preview test-pack 2>&1 | grep "render_hash:" | awk '{print $2}')
@@ -77,7 +74,7 @@ else
     exit 1
 fi
 
-# Test 9: Git diff (if in git repo)
+# Test 8: Git diff (if in git repo)
 echo "Git diff handler"
 if git rev-parse --git-dir >/dev/null 2>&1; then
     if $CTX pack create git-test >/dev/null 2>&1 && \
@@ -90,7 +87,7 @@ else
     echo "⊙ Git diff (not a git repo)"
 fi
 
-# Test 10: List packs
+# Test 9: List packs
 PACK_COUNT=$($CTX pack list 2>&1 | grep -c "Token budget:" || true)
 if [ "$PACK_COUNT" -ge 2 ]; then
     echo "✓ Pack listing ($PACK_COUNT packs)"
@@ -99,7 +96,7 @@ else
     exit 1
 fi
 
-# Test 11: ctx init
+# Test 10: ctx init
 echo "ctx init"
 PROJECT_DIR="$TEST_DIR/test-project"
 mkdir -p "$PROJECT_DIR"
@@ -113,7 +110,7 @@ else
     exit 1
 fi
 
-# Test 12: ctx.toml exists
+# Test 11: ctx.toml exists
 echo "ctx.toml created"
 if [ -f "$PROJECT_DIR/ctx.toml" ]; then
     echo "✓ ctx.toml created"
@@ -122,7 +119,7 @@ else
     exit 1
 fi
 
-# Test 13: ctx pack sync
+# Test 12: ctx pack sync
 echo "ctx pack sync"
 cat > "$PROJECT_DIR/ctx.toml" << 'TOML'
 [config]
@@ -146,7 +143,7 @@ else
     exit 1
 fi
 
-# Test 14: Namespaced packs exist
+# Test 13: Namespaced packs exist
 echo "Namespaced packs"
 if $CTX pack list 2>&1 | grep -q "test-project:project-docs"; then
     echo "✓ Namespaced packs"
@@ -155,7 +152,7 @@ else
     exit 1
 fi
 
-# Test 15: Preview namespaced pack
+# Test 14: Preview namespaced pack
 echo "Preview namespaced pack"
 if $CTX pack preview "test-project:project-docs" 2>&1 | grep -q "/ 25000"; then
     echo "✓ Preview namespaced pack"
@@ -166,7 +163,7 @@ else
     exit 1
 fi
 
-# Test 16: ctx pack save
+# Test 15: ctx pack save
 echo "ctx pack save"
 # Create a new pack and save it
 $CTX pack create test-project:new-pack --tokens 10000 >/dev/null 2>&1
@@ -178,7 +175,7 @@ else
     exit 1
 fi
 
-# Test 17: Saved pack in ctx.toml
+# Test 16: Saved pack in ctx.toml
 echo "Pack saved to ctx.toml"
 if grep -q "new-pack" "$PROJECT_DIR/ctx.toml"; then
     echo "✓ Pack saved to ctx.toml"

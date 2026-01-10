@@ -24,7 +24,7 @@ All notable changes and milestones for the ctx project.
 
 ### Testing
 - Integration test script: `tests/integration_test.sh`
-- Tests cover: pack creation, artifacts, denylist, preview, snapshot, determinism
+- Tests cover: pack creation, artifacts, denylist, preview, determinism, ctx.toml sync/save
 
 ---
 
@@ -35,7 +35,7 @@ All notable changes and milestones for the ctx project.
 ### Features
 - `ctx mcp --port 17373 --host 127.0.0.1 --read-only`
 - JSON-RPC 2.0 protocol implementation
-- MCP tools: `ctx_packs_list`, `ctx_packs_get`, `ctx_packs_preview`, `ctx_packs_snapshot`
+- MCP tools: `ctx_packs_list`, `ctx_packs_get`, `ctx_packs_preview`, `ctx_packs_create`, `ctx_packs_add_artifact`, `ctx_packs_delete`
 - Read-only mode for safety
 
 ### Implementation
@@ -45,13 +45,12 @@ All notable changes and milestones for the ctx project.
 
 ---
 
-## M2: Render + Snapshot (2026-01-04) ✅
+## M2: Render Engine (2026-01-04) ✅
 
-**Summary**: Deterministic rendering engine with token budgeting, redaction, and snapshot support.
+**Summary**: Deterministic rendering engine with token budgeting and redaction.
 
 ### Features
 - `ctx pack preview <pack> [--tokens] [--redactions] [--show-payload]`
-- `ctx pack snapshot <pack> [--label <label>]`
 - Deterministic rendering (same inputs → same hash)
 - Token estimation using tiktoken (cl100k_base)
 - Secret redaction (AWS keys, private keys, GitHub tokens, JWTs, API keys)
@@ -101,7 +100,7 @@ All notable changes and milestones for the ctx project.
 
 ### Crates
 - `ctx-cli`: CLI binary and command handlers
-- `ctx-core`: Domain models (Pack, Artifact, Snapshot, RenderPolicy)
+- `ctx-core`: Domain models (Pack, Artifact, RenderPolicy)
 - `ctx-storage`: SQLite + blob storage with migrations
 - `ctx-sources`: Source handlers (file, text, glob, collection)
 - `ctx-security`: Redaction engine

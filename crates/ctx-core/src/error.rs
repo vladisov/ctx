@@ -8,9 +8,6 @@ pub enum Error {
     #[error("Artifact not found: {0}")]
     ArtifactNotFound(String),
 
-    #[error("Snapshot not found: {0}")]
-    SnapshotNotFound(String),
-
     #[error("Pack already exists: {0}")]
     PackAlreadyExists(String),
 

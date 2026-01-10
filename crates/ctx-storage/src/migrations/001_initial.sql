@@ -32,14 +32,3 @@ CREATE TABLE IF NOT EXISTS pack_items (
 
 CREATE INDEX IF NOT EXISTS idx_pack_items_pack_ordering
     ON pack_items(pack_id, priority DESC, added_at ASC);
-
-CREATE TABLE IF NOT EXISTS snapshots (
-    snapshot_id TEXT PRIMARY KEY NOT NULL,
-    label TEXT,
-    render_hash TEXT NOT NULL,
-    payload_hash TEXT NOT NULL,
-    created_at INTEGER NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_snapshots_render_hash ON snapshots(render_hash);
-CREATE INDEX IF NOT EXISTS idx_snapshots_created ON snapshots(created_at DESC);
