@@ -9,14 +9,24 @@ use ratatui::{
 };
 
 // Style helpers
-fn bold(color: Color) -> Style { Style::default().fg(color).add_modifier(Modifier::BOLD) }
-fn dim() -> Style { Style::default().fg(Color::DarkGray) }
-fn separator() -> Line<'static> { Line::from(Span::styled("─".repeat(40), dim())) }
+fn bold(color: Color) -> Style {
+    Style::default().fg(color).add_modifier(Modifier::BOLD)
+}
+fn dim() -> Style {
+    Style::default().fg(Color::DarkGray)
+}
+fn separator() -> Line<'static> {
+    Line::from(Span::styled("─".repeat(40), dim()))
+}
 
 pub fn draw(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(3)])
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(0),
+            Constraint::Length(3),
+        ])
         .split(f.area());
 
     draw_header(f, chunks[0]);
@@ -60,25 +70,43 @@ fn draw_pack_list(f: &mut Frame, app: &App, area: Rect) {
     for (i, pack) in app.packs.iter().enumerate() {
         let is_expanded = app.is_expanded(&pack.id);
         let prefix = if is_expanded { "▾" } else { "▸" };
-        let source_count = app.pack_artifacts.get(&pack.id).map(|v| v.len()).unwrap_or(0);
+        let source_count = app
+            .pack_artifacts
+            .get(&pack.id)
+            .map(|v| v.len())
+            .unwrap_or(0);
         let budget_str = format_tokens(pack.policies.budget_tokens);
 
         let line = if source_count > 0 {
-            format!("{} {}  ({} sources, {})", prefix, pack.name, source_count, budget_str)
+            format!(
+                "{} {}  ({} sources, {})",
+                prefix, pack.name, source_count, budget_str
+            )
         } else {
             format!("{} {}  [{}]", prefix, pack.name, budget_str)
         };
 
         let is_selected = i == app.selected_pack_index && app.selected_artifact_index.is_none();
-        let style = if is_selected { bold(Color::Yellow) } else { Style::default() };
+        let style = if is_selected {
+            bold(Color::Yellow)
+        } else {
+            Style::default()
+        };
         items.push(ListItem::new(line).style(style));
 
         if is_expanded && i == app.selected_pack_index {
             if let Some(artifacts) = app.pack_artifacts.get(&pack.id) {
                 for (idx, artifact) in artifacts.iter().enumerate() {
                     let is_artifact_selected = app.selected_artifact_index == Some(idx);
-                    let style = if is_artifact_selected { bold(Color::Cyan) } else { dim() };
-                    items.push(ListItem::new(format!("  ├─ {}", artifact.artifact.source_uri)).style(style));
+                    let style = if is_artifact_selected {
+                        bold(Color::Cyan)
+                    } else {
+                        dim()
+                    };
+                    items.push(
+                        ListItem::new(format!("  ├─ {}", artifact.artifact.source_uri))
+                            .style(style),
+                    );
                 }
             }
         }
@@ -100,7 +128,10 @@ fn draw_preview(f: &mut Frame, app: &App, area: Rect) {
         return draw_artifact_content(f, app, area);
     }
 
-    let mode_str = match app.preview_mode { PreviewMode::Stats => "stats", PreviewMode::Content => "content" };
+    let mode_str = match app.preview_mode {
+        PreviewMode::Stats => "stats",
+        PreviewMode::Content => "content",
+    };
     let title = match app.focus {
         Focus::Preview => format!(" Preview ({}) [FOCUSED] ", mode_str),
         _ => format!(" Preview ({}) ", mode_str),
@@ -122,25 +153,58 @@ fn draw_artifact_content(f: &mut Frame, app: &App, area: Rect) {
     let visible = area.height.saturating_sub(2) as usize;
     let scroll = app.content_scroll.min(total_lines.saturating_sub(1));
 
-    let (name, tokens, bytes) = app.packs.get(app.selected_pack_index)
+    let (name, tokens, bytes) = app
+        .packs
+        .get(app.selected_pack_index)
         .and_then(|p| app.pack_artifacts.get(&p.id))
         .and_then(|a| app.selected_artifact_index.and_then(|i| a.get(i)))
-        .map(|item| (item.artifact.source_uri.clone(), item.artifact.token_estimate, item.artifact.metadata.size_bytes))
+        .map(|item| {
+            (
+                item.artifact.source_uri.clone(),
+                item.artifact.token_estimate,
+                item.artifact.metadata.size_bytes,
+            )
+        })
         .unwrap_or_else(|| ("unknown".into(), 0, 0));
 
-    let focus = if matches!(app.focus, Focus::Preview) { " [FOCUSED]" } else { "" };
-    let title = format!(" {}{} (line {}/{}, {} tokens, {} bytes) ", name, focus, scroll + 1, total_lines, tokens, bytes);
+    let focus = if matches!(app.focus, Focus::Preview) {
+        " [FOCUSED]"
+    } else {
+        ""
+    };
+    let title = format!(
+        " {}{} (line {}/{}, {} tokens, {} bytes) ",
+        name,
+        focus,
+        scroll + 1,
+        total_lines,
+        tokens,
+        bytes
+    );
 
-    let content: String = content_str.lines().skip(scroll).take(visible).collect::<Vec<_>>().join("\n");
+    let content: String = content_str
+        .lines()
+        .skip(scroll)
+        .take(visible)
+        .collect::<Vec<_>>()
+        .join("\n");
     f.render_widget(
-        Paragraph::new(content).block(Block::default().borders(Borders::ALL).title(title)).wrap(Wrap { trim: false }),
+        Paragraph::new(content)
+            .block(Block::default().borders(Borders::ALL).title(title))
+            .wrap(Wrap { trim: false }),
         area,
     );
 }
 
 fn draw_preview_stats(f: &mut Frame, area: Rect, title: &str, preview: &RenderResult) {
     let util = (preview.token_estimate as f64 / preview.budget_tokens as f64) * 100.0;
-    let icon = if preview.token_estimate > preview.budget_tokens { "⚠" } else if util > 90.0 { "⚡" } else { "✓" };
+    let icon = if preview.token_estimate > preview.budget_tokens {
+        "⚠"
+    } else if util > 90.0 {
+        "⚡"
+    } else {
+        "✓"
+    };
 
     let mut lines = vec![
         "📊 Token Usage".into(),
@@ -156,7 +220,12 @@ fn draw_preview_stats(f: &mut Frame, area: Rect, title: &str, preview: &RenderRe
     if !preview.redactions.is_empty() {
         lines.push(format!("  Redacted:  {} secrets", preview.redactions.len()));
     }
-    lines.extend(["".into(), "🔒 Render Hash".into(), preview.render_hash.clone(), "".into()]);
+    lines.extend([
+        "".into(),
+        "🔒 Render Hash".into(),
+        preview.render_hash.clone(),
+        "".into(),
+    ]);
 
     if !preview.excluded.is_empty() {
         lines.push("⚠ Excluded:".into());
@@ -169,22 +238,35 @@ fn draw_preview_stats(f: &mut Frame, area: Rect, title: &str, preview: &RenderRe
     }
 
     f.render_widget(
-        Paragraph::new(lines.join("\n")).block(Block::default().borders(Borders::ALL).title(title)).wrap(Wrap { trim: true }),
+        Paragraph::new(lines.join("\n"))
+            .block(Block::default().borders(Borders::ALL).title(title))
+            .wrap(Wrap { trim: true }),
         area,
     );
 }
 
 fn draw_preview_content(f: &mut Frame, app: &App, area: Rect, title: &str, preview: &RenderResult) {
-    let (content, title) = preview.payload.as_ref().map(|payload| {
-        let total = payload.lines().count();
-        let visible = area.height.saturating_sub(2) as usize;
-        let scroll = app.content_scroll.min(total.saturating_sub(1));
-        let lines: String = payload.lines().skip(scroll).take(visible).collect::<Vec<_>>().join("\n");
-        (lines, format!("{} (line {}/{}) ", title, scroll + 1, total))
-    }).unwrap_or_else(|| ("No content. Press 'p' to preview.".into(), title.into()));
+    let (content, title) = preview
+        .payload
+        .as_ref()
+        .map(|payload| {
+            let total = payload.lines().count();
+            let visible = area.height.saturating_sub(2) as usize;
+            let scroll = app.content_scroll.min(total.saturating_sub(1));
+            let lines: String = payload
+                .lines()
+                .skip(scroll)
+                .take(visible)
+                .collect::<Vec<_>>()
+                .join("\n");
+            (lines, format!("{} (line {}/{}) ", title, scroll + 1, total))
+        })
+        .unwrap_or_else(|| ("No content. Press 'p' to preview.".into(), title.into()));
 
     f.render_widget(
-        Paragraph::new(content).block(Block::default().borders(Borders::ALL).title(title)).wrap(Wrap { trim: false }),
+        Paragraph::new(content)
+            .block(Block::default().borders(Borders::ALL).title(title))
+            .wrap(Wrap { trim: false }),
         area,
     );
 }
@@ -195,15 +277,21 @@ fn draw_preview_help(f: &mut Frame, app: &App, area: Rect, title: &str) {
         .unwrap_or_else(|| "No packs. Press 'c' to create.".into());
 
     f.render_widget(
-        Paragraph::new(help).block(Block::default().borders(Borders::ALL).title(title)).wrap(Wrap { trim: true }),
+        Paragraph::new(help)
+            .block(Block::default().borders(Borders::ALL).title(title))
+            .wrap(Wrap { trim: true }),
         area,
     );
 }
 
 fn format_tokens(tokens: usize) -> String {
-    if tokens >= 1_000_000 { format!("{:.1}M", tokens as f64 / 1_000_000.0) }
-    else if tokens >= 1_000 { format!("{}k", tokens / 1_000) }
-    else { tokens.to_string() }
+    if tokens >= 1_000_000 {
+        format!("{:.1}M", tokens as f64 / 1_000_000.0)
+    } else if tokens >= 1_000 {
+        format!("{}k", tokens / 1_000)
+    } else {
+        tokens.to_string()
+    }
 }
 
 fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
@@ -219,14 +307,23 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
     };
     let spans = vec![
         Span::styled(mode, bold(Color::Magenta)),
-        Span::raw(status), Span::raw(" | "),
-        Span::styled("?", Style::default().fg(Color::Cyan)), Span::raw(":help "),
-        Span::styled("c", Style::default().fg(Color::Yellow)), Span::raw(":create "),
-        Span::styled("a", Style::default().fg(Color::Yellow)), Span::raw(":add "),
-        Span::styled("p", Style::default().fg(Color::Yellow)), Span::raw(":preview "),
-        Span::styled("q", Style::default().fg(Color::Yellow)), Span::raw(":quit"),
+        Span::raw(status),
+        Span::raw(" | "),
+        Span::styled("?", Style::default().fg(Color::Cyan)),
+        Span::raw(":help "),
+        Span::styled("c", Style::default().fg(Color::Yellow)),
+        Span::raw(":create "),
+        Span::styled("a", Style::default().fg(Color::Yellow)),
+        Span::raw(":add "),
+        Span::styled("p", Style::default().fg(Color::Yellow)),
+        Span::raw(":preview "),
+        Span::styled("q", Style::default().fg(Color::Yellow)),
+        Span::raw(":quit"),
     ];
-    f.render_widget(Paragraph::new(Line::from(spans)).block(Block::default().borders(Borders::ALL)), area);
+    f.render_widget(
+        Paragraph::new(Line::from(spans)).block(Block::default().borders(Borders::ALL)),
+        area,
+    );
 }
 
 fn draw_input_dialog(f: &mut Frame, title: &str, prompt: &str, examples: &[&str], input: &str) {
@@ -242,22 +339,38 @@ fn draw_input_dialog(f: &mut Frame, title: &str, prompt: &str, examples: &[&str]
 
     if !examples.is_empty() {
         lines.push(Line::from(Span::styled("Examples:", dim())));
-        for ex in examples { lines.push(Line::from(format!("  {}", ex))); }
+        for ex in examples {
+            lines.push(Line::from(format!("  {}", ex)));
+        }
         lines.push(Line::from(""));
     }
 
     // Input box with clear visual borders
-    lines.push(Line::from(Span::styled("┌────────────────────────────────────────────────────────┐", Style::default().fg(Color::Green))));
+    lines.push(Line::from(Span::styled(
+        "┌────────────────────────────────────────────────────────┐",
+        Style::default().fg(Color::Green),
+    )));
     lines.push(Line::from(vec![
         Span::styled("│ ", Style::default().fg(Color::Green)),
         Span::styled(input, Style::default().fg(Color::White).bg(Color::DarkGray)),
-        Span::styled("█", Style::default().fg(Color::Yellow).add_modifier(Modifier::SLOW_BLINK)),
+        Span::styled(
+            "█",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::SLOW_BLINK),
+        ),
         Span::raw(" ".repeat(55_usize.saturating_sub(input.len()))),
         Span::styled("│", Style::default().fg(Color::Green)),
     ]));
-    lines.push(Line::from(Span::styled("└────────────────────────────────────────────────────────┘", Style::default().fg(Color::Green))));
+    lines.push(Line::from(Span::styled(
+        "└────────────────────────────────────────────────────────┘",
+        Style::default().fg(Color::Green),
+    )));
     lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled("Enter to confirm, Esc to cancel", dim())));
+    lines.push(Line::from(Span::styled(
+        "Enter to confirm, Esc to cancel",
+        dim(),
+    )));
 
     let block = Block::default()
         .title(format!(" {} ", title))
@@ -266,66 +379,146 @@ fn draw_input_dialog(f: &mut Frame, title: &str, prompt: &str, examples: &[&str]
         .border_style(Style::default().fg(Color::Cyan))
         .style(Style::default().bg(Color::Black));
 
-    f.render_widget(Paragraph::new(lines).block(block).wrap(Wrap { trim: false }), area);
+    f.render_widget(
+        Paragraph::new(lines)
+            .block(block)
+            .wrap(Wrap { trim: false }),
+        area,
+    );
 }
 
 fn draw_add_artifact_dialog(f: &mut Frame, app: &App) {
-    draw_input_dialog(f, "Add Artifact", "Enter artifact URI:", &["file:path/to/file", "glob:src/**/*.rs", "text:Your inline text", "git:diff --base=main"], &app.input_buffer);
+    draw_input_dialog(
+        f,
+        "Add Artifact",
+        "Enter artifact URI:",
+        &[
+            "file:path/to/file",
+            "glob:src/**/*.rs",
+            "text:Your inline text",
+            "git:diff --base=main",
+        ],
+        &app.input_buffer,
+    );
 }
 
 fn draw_create_pack_dialog(f: &mut Frame, app: &App) {
-    draw_input_dialog(f, "Create Pack", "Enter pack name or name:budget:", &["my-pack          (default 128k)", "my-pack:50000    (custom budget)"], &app.input_buffer);
+    draw_input_dialog(
+        f,
+        "Create Pack",
+        "Enter pack name or name:budget:",
+        &[
+            "my-pack          (default 128k)",
+            "my-pack:50000    (custom budget)",
+        ],
+        &app.input_buffer,
+    );
 }
 
 fn draw_edit_budget_dialog(f: &mut Frame, app: &App) {
-    let (name, budget) = app.packs.get(app.selected_pack_index)
+    let (name, budget) = app
+        .packs
+        .get(app.selected_pack_index)
         .map(|p| (p.name.as_str(), p.policies.budget_tokens))
         .unwrap_or(("unknown", 0));
-    draw_input_dialog(f, &format!("Edit Budget: {}", name), &format!("Current: {}. Enter new budget:", budget), &[], &app.input_buffer);
+    draw_input_dialog(
+        f,
+        &format!("Edit Budget: {}", name),
+        &format!("Current: {}. Enter new budget:", budget),
+        &[],
+        &app.input_buffer,
+    );
 }
 
 fn draw_confirm_delete_dialog(f: &mut Frame, app: &App) {
     let area = centered_rect(50, 10, f.area());
     f.render_widget(Clear, area);
-    let name = app.packs.get(app.selected_pack_index).map(|p| p.name.as_str()).unwrap_or("unknown");
+    let name = app
+        .packs
+        .get(app.selected_pack_index)
+        .map(|p| p.name.as_str())
+        .unwrap_or("unknown");
     let lines = vec![
         Line::from(""),
-        Line::from(Span::styled(format!("Delete pack '{}'?", name), bold(Color::Red))),
+        Line::from(Span::styled(
+            format!("Delete pack '{}'?", name),
+            bold(Color::Red),
+        )),
         Line::from(""),
         Line::from("This cannot be undone."),
         Line::from(""),
         Line::from(Span::styled("Y to confirm, N/Esc to cancel", dim())),
     ];
     f.render_widget(
-        Paragraph::new(lines).block(Block::default().title(" Confirm Delete ").borders(Borders::ALL).style(Style::default().bg(Color::Black).fg(Color::Red))).wrap(Wrap { trim: true }),
+        Paragraph::new(lines)
+            .block(
+                Block::default()
+                    .title(" Confirm Delete ")
+                    .borders(Borders::ALL)
+                    .style(Style::default().bg(Color::Black).fg(Color::Red)),
+            )
+            .wrap(Wrap { trim: true }),
         area,
     );
 }
 
 fn draw_help_screen(f: &mut Frame) {
     let frame = f.area();
-    let area = centered_rect(frame.width.saturating_sub(10), frame.height.saturating_sub(6), frame);
+    let area = centered_rect(
+        frame.width.saturating_sub(10),
+        frame.height.saturating_sub(6),
+        frame,
+    );
     f.render_widget(Clear, area);
     let sections = [
-        ("Navigation", vec!["j/k ↓/↑  Navigate", "Space/Enter  Expand pack", "Tab  Switch focus"]),
-        ("Pack", vec!["c  Create", "e  Edit budget", "D  Delete", "r  Refresh"]),
+        (
+            "Navigation",
+            vec![
+                "j/k ↓/↑  Navigate",
+                "Space/Enter  Expand pack",
+                "Tab  Switch focus",
+            ],
+        ),
+        (
+            "Pack",
+            vec!["c  Create", "e  Edit budget", "D  Delete", "r  Refresh"],
+        ),
         ("Artifact", vec!["a  Add artifact", "d  Delete artifact"]),
-        ("Preview", vec!["p  Preview/load content", "v  Toggle stats/content", "j/k  Scroll", "PageUp/Down  Page scroll"]),
+        (
+            "Preview",
+            vec![
+                "p  Preview/load content",
+                "v  Toggle stats/content",
+                "j/k  Scroll",
+                "PageUp/Down  Page scroll",
+            ],
+        ),
         ("Other", vec!["?  Help", "q  Quit"]),
     ];
 
     let mut lines: Vec<Line> = Vec::new();
     for (title, items) in sections {
         lines.push(Line::from(Span::styled(title, bold(Color::Yellow))));
-        for item in items { lines.push(Line::from(format!("  {}", item))); }
+        for item in items {
+            lines.push(Line::from(format!("  {}", item)));
+        }
         lines.push(Line::from(""));
     }
     lines.push(Line::from(Span::styled("Tips:", bold(Color::Cyan))));
-    lines.push(Line::from("  • Select artifact (cyan) and press 'p' to view"));
+    lines.push(Line::from(
+        "  • Select artifact (cyan) and press 'p' to view",
+    ));
     lines.push(Line::from("  • Pack format: 'name' or 'name:budget'"));
 
     f.render_widget(
-        Paragraph::new(lines).block(Block::default().title(" Help - ? or Esc to close ").borders(Borders::ALL).style(Style::default().bg(Color::Black))).wrap(Wrap { trim: true }),
+        Paragraph::new(lines)
+            .block(
+                Block::default()
+                    .title(" Help - ? or Esc to close ")
+                    .borders(Borders::ALL)
+                    .style(Style::default().bg(Color::Black)),
+            )
+            .wrap(Wrap { trim: true }),
         area,
     );
 }
@@ -341,14 +534,24 @@ fn draw_loading_indicator(f: &mut Frame, app: &App) {
         Line::from(msg),
     ];
     f.render_widget(
-        Paragraph::new(lines).block(Block::default().borders(Borders::ALL).style(Style::default().bg(Color::Black).fg(Color::Yellow))).alignment(Alignment::Center),
+        Paragraph::new(lines)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .style(Style::default().bg(Color::Black).fg(Color::Yellow)),
+            )
+            .alignment(Alignment::Center),
         area,
     );
 }
 
 fn draw_file_browser(f: &mut Frame, app: &App) {
     let frame = f.area();
-    let area = centered_rect(frame.width.saturating_sub(6), frame.height.saturating_sub(4), frame);
+    let area = centered_rect(
+        frame.width.saturating_sub(6),
+        frame.height.saturating_sub(4),
+        frame,
+    );
     f.render_widget(Clear, area);
 
     let chunks = Layout::default()
@@ -356,38 +559,75 @@ fn draw_file_browser(f: &mut Frame, app: &App) {
         .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
         .split(area);
 
-    let Some(browser) = &app.file_browser else { return };
+    let Some(browser) = &app.file_browser else {
+        return;
+    };
     let visible = chunks[0].height.saturating_sub(2) as usize;
 
     // File list
     if browser.entries.is_empty() {
         f.render_widget(
-            Paragraph::new("Directory is empty").block(Block::default().borders(Borders::ALL).title(" Files ")).style(dim()),
+            Paragraph::new("Directory is empty")
+                .block(Block::default().borders(Borders::ALL).title(" Files "))
+                .style(dim()),
             chunks[0],
         );
     } else {
-        let items: Vec<ListItem> = browser.entries.iter().enumerate()
+        let items: Vec<ListItem> = browser
+            .entries
+            .iter()
+            .enumerate()
             .skip(browser.scroll_offset)
             .take(visible)
             .map(|(i, e)| {
-                let icon = if e.name == ".." { "⬆ " } else if e.is_dir { "📁 " } else { "📄 " };
-                let name = if e.name.len() > 50 { format!("{}...", &e.name[..47]) } else { e.name.clone() };
-                let style = if i == browser.selected_index { bold(Color::Yellow).bg(Color::DarkGray) }
-                    else if e.is_dir { Style::default().fg(Color::Cyan) }
-                    else if e.is_hidden { dim() }
-                    else { Style::default() };
+                let icon = if e.name == ".." {
+                    "⬆ "
+                } else if e.is_dir {
+                    "📁 "
+                } else {
+                    "📄 "
+                };
+                let name = if e.name.len() > 50 {
+                    format!("{}...", &e.name[..47])
+                } else {
+                    e.name.clone()
+                };
+                let style = if i == browser.selected_index {
+                    bold(Color::Yellow).bg(Color::DarkGray)
+                } else if e.is_dir {
+                    Style::default().fg(Color::Cyan)
+                } else if e.is_hidden {
+                    dim()
+                } else {
+                    Style::default()
+                };
                 ListItem::new(format!("{}{}", icon, name)).style(style)
-            }).collect();
+            })
+            .collect();
 
-        let scroll_info = if browser.entries.len() > visible { format!(" [{}/{}]", browser.selected_index + 1, browser.entries.len()) } else { String::new() };
+        let scroll_info = if browser.entries.len() > visible {
+            format!(
+                " [{}/{}]",
+                browser.selected_index + 1,
+                browser.entries.len()
+            )
+        } else {
+            String::new()
+        };
         let title = format!(" Files: {}{} ", browser.current_dir.display(), scroll_info);
-        f.render_widget(List::new(items).block(Block::default().borders(Borders::ALL).title(title)), chunks[0]);
+        f.render_widget(
+            List::new(items).block(Block::default().borders(Borders::ALL).title(title)),
+            chunks[0],
+        );
     }
 
     // Info pane
     let mut info = vec![
         Line::from(Span::styled("Type:", bold(Color::Cyan))),
-        Line::from(Span::styled(browser.artifact_type.label(), Style::default().fg(Color::Yellow))),
+        Line::from(Span::styled(
+            browser.artifact_type.label(),
+            Style::default().fg(Color::Yellow),
+        )),
         Line::from(""),
     ];
 
@@ -398,18 +638,37 @@ fn draw_file_browser(f: &mut Frame, app: &App) {
             Line::from(""),
         ]);
         if let Some(uri) = browser.get_selected_uri() {
-            info.extend([Line::from(Span::styled("Will add:", bold(Color::Cyan))), Line::from(Span::styled(uri, Style::default().fg(Color::Green)))]);
+            info.extend([
+                Line::from(Span::styled("Will add:", bold(Color::Cyan))),
+                Line::from(Span::styled(uri, Style::default().fg(Color::Green))),
+            ]);
         } else if e.name == ".." {
             info.push(Line::from(Span::styled("Enter to go up", dim())));
         }
     }
 
     info.extend([Line::from(""), separator(), Line::from("")]);
-    for (key, desc) in [("j/k", "Navigate"), ("Enter/l", "Enter"), ("h/Back", "Up"), ("Tab", "Type"), (".", "Hidden"), ("Space", "Confirm"), ("Esc", "Cancel")] {
-        info.push(Line::from(vec![Span::styled(key, Style::default().fg(Color::Yellow)), Span::raw(format!(" {}", desc))]));
+    for (key, desc) in [
+        ("j/k", "Navigate"),
+        ("Enter/l", "Enter"),
+        ("h/Back", "Up"),
+        ("Tab", "Type"),
+        (".", "Hidden"),
+        ("Space", "Confirm"),
+        ("Esc", "Cancel"),
+    ] {
+        info.push(Line::from(vec![
+            Span::styled(key, Style::default().fg(Color::Yellow)),
+            Span::raw(format!(" {}", desc)),
+        ]));
     }
 
-    f.render_widget(Paragraph::new(info).block(Block::default().borders(Borders::ALL).title(" Info ")).wrap(Wrap { trim: true }), chunks[1]);
+    f.render_widget(
+        Paragraph::new(info)
+            .block(Block::default().borders(Borders::ALL).title(" Info "))
+            .wrap(Wrap { trim: true }),
+        chunks[1],
+    );
 }
 
 fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {

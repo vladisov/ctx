@@ -58,7 +58,10 @@ pub async fn call_tool(
 
             server.db.create_snapshot(&snapshot).await?;
 
-            format!("Snapshot created: {}\nRender hash: {}", snapshot.id, snapshot.render_hash)
+            format!(
+                "Snapshot created: {}\nRender hash: {}",
+                snapshot.id, snapshot.render_hash
+            )
         }
         "ctx_packs_create" => {
             if server.read_only {
@@ -78,7 +81,10 @@ pub async fn call_tool(
             );
             server.db.create_pack(&pack).await?;
 
-            format!("Created pack '{}' with {} token budget (id: {})", name, budget, pack.id)
+            format!(
+                "Created pack '{}' with {} token budget (id: {})",
+                name, budget, pack.id
+            )
         }
         "ctx_packs_add_artifact" => {
             if server.read_only {
@@ -102,18 +108,28 @@ pub async fn call_tool(
             let artifact = registry.parse(source, options).await?;
             let is_collection = matches!(
                 artifact.artifact_type,
-                ctx_core::ArtifactType::CollectionMdDir { .. } | ctx_core::ArtifactType::CollectionGlob { .. }
+                ctx_core::ArtifactType::CollectionMdDir { .. }
+                    | ctx_core::ArtifactType::CollectionGlob { .. }
             );
 
             if is_collection {
                 server.db.create_artifact(&artifact).await?;
-                server.db.add_artifact_to_pack(&pack.id, &artifact.id, priority).await?;
+                server
+                    .db
+                    .add_artifact_to_pack(&pack.id, &artifact.id, priority)
+                    .await?;
             } else {
                 let content = registry.load(&artifact).await?;
-                server.db.add_artifact_to_pack_with_content(&pack.id, &artifact, &content, priority).await?;
+                server
+                    .db
+                    .add_artifact_to_pack_with_content(&pack.id, &artifact, &content, priority)
+                    .await?;
             }
 
-            format!("Added '{}' to pack '{}' (artifact id: {})", source, pack.name, artifact.id)
+            format!(
+                "Added '{}' to pack '{}' (artifact id: {})",
+                source, pack.name, artifact.id
+            )
         }
         "ctx_packs_delete" => {
             if server.read_only {
@@ -141,7 +157,11 @@ pub async fn call_tool(
 
 pub fn list_tools(read_only: bool) -> serde_json::Value {
     let mut tools = vec![
-        tool_schema("ctx_packs_list", "List all context packs", json!({"type": "object", "properties": {}})),
+        tool_schema(
+            "ctx_packs_list",
+            "List all context packs",
+            json!({"type": "object", "properties": {}}),
+        ),
         tool_schema(
             "ctx_packs_get",
             "Get pack details including artifacts",

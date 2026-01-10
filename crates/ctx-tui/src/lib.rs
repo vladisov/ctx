@@ -1,6 +1,6 @@
 mod app;
-mod ui;
 mod file_browser;
+mod ui;
 
 pub use app::App;
 
@@ -85,7 +85,9 @@ async fn run_app<B: ratatui::backend::Backend>(
                             _ => {}
                         }
                     }
-                    InputMode::AddingArtifact | InputMode::CreatingPack | InputMode::EditingBudget => match key.code {
+                    InputMode::AddingArtifact
+                    | InputMode::CreatingPack
+                    | InputMode::EditingBudget => match key.code {
                         KeyCode::Enter => match app.input_mode {
                             InputMode::AddingArtifact => app.confirm_add_artifact().await?,
                             InputMode::CreatingPack => app.confirm_create_pack().await?,
@@ -98,14 +100,18 @@ async fn run_app<B: ratatui::backend::Backend>(
                         _ => {}
                     },
                     InputMode::ConfirmDeletePack => match key.code {
-                        KeyCode::Char('y') | KeyCode::Char('Y') => app.confirm_delete_pack().await?,
-                        KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => app.cancel_input(),
+                        KeyCode::Char('y') | KeyCode::Char('Y') => {
+                            app.confirm_delete_pack().await?
+                        }
+                        KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                            app.cancel_input()
+                        }
                         _ => {}
                     },
                     InputMode::ShowingHelp => match key.code {
                         KeyCode::Char('?') | KeyCode::Esc | KeyCode::Char('q') => app.toggle_help(),
                         _ => {}
-                    }
+                    },
                 }
             }
         }

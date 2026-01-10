@@ -89,15 +89,16 @@ impl FileBrowser {
         }
 
         // Sort: ".." first, then directories, then files alphabetically
-        self.entries.sort_by(|a, b| match (&a.name[..], &b.name[..]) {
-            ("..", _) => Ordering::Less,
-            (_, "..") => Ordering::Greater,
-            _ => match (a.is_dir, b.is_dir) {
-                (true, false) => Ordering::Less,
-                (false, true) => Ordering::Greater,
-                _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-            },
-        });
+        self.entries
+            .sort_by(|a, b| match (&a.name[..], &b.name[..]) {
+                ("..", _) => Ordering::Less,
+                (_, "..") => Ordering::Greater,
+                _ => match (a.is_dir, b.is_dir) {
+                    (true, false) => Ordering::Less,
+                    (false, true) => Ordering::Greater,
+                    _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                },
+            });
         Ok(())
     }
 

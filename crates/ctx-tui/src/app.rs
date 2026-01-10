@@ -1,12 +1,15 @@
-use anyhow::Result;
 use crate::file_browser::FileBrowser;
-use ctx_core::{ArtifactType, Pack, RenderPolicy, OrderingStrategy, render::RenderResult};
+use anyhow::Result;
+use ctx_core::{render::RenderResult, ArtifactType, OrderingStrategy, Pack, RenderPolicy};
 use ctx_sources::{SourceHandlerRegistry, SourceOptions};
 use ctx_storage::{PackItem, Storage};
 use std::collections::HashMap;
 
 #[derive(Clone, PartialEq)]
-pub enum Focus { PackList, Preview }
+pub enum Focus {
+    PackList,
+    Preview,
+}
 
 #[derive(Clone, PartialEq)]
 pub enum InputMode {
@@ -20,7 +23,10 @@ pub enum InputMode {
 }
 
 #[derive(Clone, PartialEq)]
-pub enum PreviewMode { Stats, Content }
+pub enum PreviewMode {
+    Stats,
+    Content,
+}
 
 pub struct App {
     pub storage: Storage,
@@ -79,7 +85,9 @@ impl App {
     }
 
     pub fn next(&mut self) {
-        if self.packs.is_empty() { return; }
+        if self.packs.is_empty() {
+            return;
+        }
 
         // Navigate within artifacts if pack is expanded
         if let Some(pack) = self.selected_pack() {
@@ -110,7 +118,9 @@ impl App {
     }
 
     pub fn previous(&mut self) {
-        if self.packs.is_empty() { return; }
+        if self.packs.is_empty() {
+            return;
+        }
 
         if let Some(idx) = self.selected_artifact_index {
             self.selected_artifact_index = if idx > 0 { Some(idx - 1) } else { None };
@@ -118,14 +128,17 @@ impl App {
             return;
         }
 
-        self.selected_pack_index = self.selected_pack_index
+        self.selected_pack_index = self
+            .selected_pack_index
             .checked_sub(1)
             .unwrap_or(self.packs.len() - 1);
         self.clear_artifact_state();
     }
 
     pub async fn toggle_expand(&mut self) -> Result<()> {
-        let Some(pack) = self.selected_pack() else { return Ok(()) };
+        let Some(pack) = self.selected_pack() else {
+            return Ok(());
+        };
         let pack_id = pack.id.clone();
 
         if let Some(pos) = self.expanded_packs.iter().position(|id| id == &pack_id) {
@@ -133,7 +146,9 @@ impl App {
         } else {
             if !self.pack_artifacts.contains_key(&pack_id) {
                 match self.storage.get_pack_artifacts(&pack_id).await {
-                    Ok(artifacts) => { self.pack_artifacts.insert(pack_id.clone(), artifacts); }
+                    Ok(artifacts) => {
+                        self.pack_artifacts.insert(pack_id.clone(), artifacts);
+                    }
                     Err(e) => {
                         self.status_message = Some(format!("Failed to load sources: {e}"));
                         return Ok(());
@@ -154,11 +169,14 @@ impl App {
             return self.load_artifact_content(idx).await;
         }
 
-        let Some(pack_id) = self.selected_pack().map(|p| p.id.clone()) else { return Ok(()) };
+        let Some(pack_id) = self.selected_pack().map(|p| p.id.clone()) else {
+            return Ok(());
+        };
         self.loading_message = Some("Generating preview...".into());
 
         let result = ctx_engine::Renderer::new(self.storage.clone())
-            .render_pack(&pack_id, None).await;
+            .render_pack(&pack_id, None)
+            .await;
 
         match result {
             Ok(r) => {
@@ -172,9 +190,15 @@ impl App {
     }
 
     pub async fn load_artifact_content(&mut self, idx: usize) -> Result<()> {
-        let Some(pack) = self.selected_pack() else { return Ok(()) };
-        let Some(artifacts) = self.pack_artifacts.get(&pack.id) else { return Ok(()) };
-        let Some(item) = artifacts.get(idx) else { return Ok(()) };
+        let Some(pack) = self.selected_pack() else {
+            return Ok(());
+        };
+        let Some(artifacts) = self.pack_artifacts.get(&pack.id) else {
+            return Ok(());
+        };
+        let Some(item) = artifacts.get(idx) else {
+            return Ok(());
+        };
 
         self.loading_message = Some("Loading artifact content...".into());
 
@@ -219,17 +243,27 @@ impl App {
     }
 
     pub fn navigate_or_scroll_down(&mut self) {
-        if self.is_viewing_content() { self.content_scroll += 1; }
-        else { self.next(); }
+        if self.is_viewing_content() {
+            self.content_scroll += 1;
+        } else {
+            self.next();
+        }
     }
 
     pub fn navigate_or_scroll_up(&mut self) {
-        if self.is_viewing_content() { self.content_scroll = self.content_scroll.saturating_sub(1); }
-        else { self.previous(); }
+        if self.is_viewing_content() {
+            self.content_scroll = self.content_scroll.saturating_sub(1);
+        } else {
+            self.previous();
+        }
     }
 
-    pub fn scroll_page_up(&mut self) { self.content_scroll = self.content_scroll.saturating_sub(10); }
-    pub fn scroll_page_down(&mut self) { self.content_scroll += 10; }
+    pub fn scroll_page_up(&mut self) {
+        self.content_scroll = self.content_scroll.saturating_sub(10);
+    }
+    pub fn scroll_page_down(&mut self) {
+        self.content_scroll += 10;
+    }
 
     pub fn start_add_artifact(&mut self) {
         match FileBrowser::new(None) {
@@ -257,7 +291,9 @@ impl App {
         }
     }
 
-    pub fn start_delete_pack(&mut self) { self.input_mode = InputMode::ConfirmDeletePack; }
+    pub fn start_delete_pack(&mut self) {
+        self.input_mode = InputMode::ConfirmDeletePack;
+    }
 
     pub fn toggle_help(&mut self) {
         self.input_mode = match self.input_mode {
@@ -273,19 +309,53 @@ impl App {
         self.file_browser = None;
     }
 
-    pub fn input_char(&mut self, c: char) { self.input_buffer.push(c); }
-    pub fn input_backspace(&mut self) { self.input_buffer.pop(); }
+    pub fn input_char(&mut self, c: char) {
+        self.input_buffer.push(c);
+    }
+    pub fn input_backspace(&mut self) {
+        self.input_buffer.pop();
+    }
 
     // File browser operations
-    pub fn browser_next(&mut self, h: usize) { if let Some(b) = &mut self.file_browser { b.next(h); } }
-    pub fn browser_previous(&mut self) { if let Some(b) = &mut self.file_browser { b.previous(); } }
-    pub fn browser_enter(&mut self) -> Result<()> { self.file_browser.as_mut().map(|b| b.enter_selected()).transpose()?; Ok(()) }
-    pub fn browser_go_up(&mut self) -> Result<()> { self.file_browser.as_mut().map(|b| b.go_up()).transpose()?; Ok(()) }
-    pub fn browser_toggle_hidden(&mut self) -> Result<()> { self.file_browser.as_mut().map(|b| b.toggle_hidden()).transpose()?; Ok(()) }
-    pub fn browser_cycle_type(&mut self) { if let Some(b) = &mut self.file_browser { b.cycle_artifact_type(); } }
+    pub fn browser_next(&mut self, h: usize) {
+        if let Some(b) = &mut self.file_browser {
+            b.next(h);
+        }
+    }
+    pub fn browser_previous(&mut self) {
+        if let Some(b) = &mut self.file_browser {
+            b.previous();
+        }
+    }
+    pub fn browser_enter(&mut self) -> Result<()> {
+        self.file_browser
+            .as_mut()
+            .map(|b| b.enter_selected())
+            .transpose()?;
+        Ok(())
+    }
+    pub fn browser_go_up(&mut self) -> Result<()> {
+        self.file_browser.as_mut().map(|b| b.go_up()).transpose()?;
+        Ok(())
+    }
+    pub fn browser_toggle_hidden(&mut self) -> Result<()> {
+        self.file_browser
+            .as_mut()
+            .map(|b| b.toggle_hidden())
+            .transpose()?;
+        Ok(())
+    }
+    pub fn browser_cycle_type(&mut self) {
+        if let Some(b) = &mut self.file_browser {
+            b.cycle_artifact_type();
+        }
+    }
 
     pub async fn browser_confirm_selection(&mut self) -> Result<()> {
-        let uri = self.file_browser.as_ref().and_then(|b| b.get_selected_uri());
+        let uri = self
+            .file_browser
+            .as_ref()
+            .and_then(|b| b.get_selected_uri());
         if let Some(uri) = uri {
             self.input_buffer = uri;
             self.file_browser = None;
@@ -314,23 +384,41 @@ impl App {
         self.loading_message = Some("Adding artifact...".into());
 
         let registry = SourceHandlerRegistry::new();
-        let options = SourceOptions { range: None, max_files: None, exclude: Vec::new(), recursive: false, priority: 0 };
+        let options = SourceOptions {
+            range: None,
+            max_files: None,
+            exclude: Vec::new(),
+            recursive: false,
+            priority: 0,
+        };
 
         match registry.parse(&uri, options).await {
             Ok(artifact) => {
-                let is_collection = matches!(artifact.artifact_type,
-                    ArtifactType::CollectionMdDir { .. } | ArtifactType::CollectionGlob { .. });
+                let is_collection = matches!(
+                    artifact.artifact_type,
+                    ArtifactType::CollectionMdDir { .. } | ArtifactType::CollectionGlob { .. }
+                );
 
                 let result: Result<()> = async {
                     if is_collection {
-                        self.storage.create_artifact(&artifact).await.map_err(|e| anyhow::anyhow!("{e}"))?;
-                        self.storage.add_artifact_to_pack(&pack_id, &artifact.id, 0).await.map_err(|e| anyhow::anyhow!("{e}"))
+                        self.storage
+                            .create_artifact(&artifact)
+                            .await
+                            .map_err(|e| anyhow::anyhow!("{e}"))?;
+                        self.storage
+                            .add_artifact_to_pack(&pack_id, &artifact.id, 0)
+                            .await
+                            .map_err(|e| anyhow::anyhow!("{e}"))
                     } else {
                         let content = registry.load(&artifact).await?;
-                        self.storage.add_artifact_to_pack_with_content(&pack_id, &artifact, &content, 0).await
-                            .map(|_| ()).map_err(|e| anyhow::anyhow!("{e}"))
+                        self.storage
+                            .add_artifact_to_pack_with_content(&pack_id, &artifact, &content, 0)
+                            .await
+                            .map(|_| ())
+                            .map_err(|e| anyhow::anyhow!("{e}"))
                     }
-                }.await;
+                }
+                .await;
 
                 match result {
                     Ok(_) => {
@@ -352,15 +440,31 @@ impl App {
     }
 
     pub async fn delete_artifact(&mut self) -> Result<()> {
-        let Some(idx) = self.selected_artifact_index else { return Ok(()) };
-        let Some(pack) = self.selected_pack() else { return Ok(()) };
-        let Some(artifacts) = self.pack_artifacts.get(&pack.id) else { return Ok(()) };
-        let Some(item) = artifacts.get(idx) else { return Ok(()) };
+        let Some(idx) = self.selected_artifact_index else {
+            return Ok(());
+        };
+        let Some(pack) = self.selected_pack() else {
+            return Ok(());
+        };
+        let Some(artifacts) = self.pack_artifacts.get(&pack.id) else {
+            return Ok(());
+        };
+        let Some(item) = artifacts.get(idx) else {
+            return Ok(());
+        };
 
-        let (pack_id, artifact_id, uri) = (pack.id.clone(), item.artifact.id.clone(), item.artifact.source_uri.clone());
+        let (pack_id, artifact_id, uri) = (
+            pack.id.clone(),
+            item.artifact.id.clone(),
+            item.artifact.source_uri.clone(),
+        );
 
         self.loading_message = Some("Deleting...".into());
-        match self.storage.remove_artifact_from_pack(&pack_id, &artifact_id).await {
+        match self
+            .storage
+            .remove_artifact_from_pack(&pack_id, &artifact_id)
+            .await
+        {
             Ok(_) => {
                 self.status_message = Some(format!("Removed: {uri}"));
                 if let Ok(a) = self.storage.get_pack_artifacts(&pack_id).await {
@@ -375,7 +479,10 @@ impl App {
     }
 
     pub async fn confirm_delete_pack(&mut self) -> Result<()> {
-        let Some(pack) = self.selected_pack() else { self.cancel_input(); return Ok(()) };
+        let Some(pack) = self.selected_pack() else {
+            self.cancel_input();
+            return Ok(());
+        };
         let (pack_id, pack_name) = (pack.id.clone(), pack.name.clone());
 
         self.cancel_input();
@@ -420,16 +527,20 @@ impl App {
         self.cancel_input();
         self.loading_message = Some(format!("Creating '{name}'..."));
 
-        let pack = Pack::new(name.clone(), RenderPolicy {
-            budget_tokens: budget,
-            ordering: OrderingStrategy::PriorityThenTime,
-        });
+        let pack = Pack::new(
+            name.clone(),
+            RenderPolicy {
+                budget_tokens: budget,
+                ordering: OrderingStrategy::PriorityThenTime,
+            },
+        );
 
         match self.storage.create_pack(&pack).await {
             Ok(_) => {
                 self.status_message = Some(format!("Created: {name} ({budget} tokens)"));
                 self.packs = self.storage.list_packs().await?;
-                self.selected_pack_index = self.packs.iter().position(|p| p.id == pack.id).unwrap_or(0);
+                self.selected_pack_index =
+                    self.packs.iter().position(|p| p.id == pack.id).unwrap_or(0);
             }
             Err(e) => self.status_message = Some(format!("Failed: {e}")),
         }
