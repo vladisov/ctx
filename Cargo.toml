@@ -55,9 +55,13 @@ walkdir = "2.5"
 ignore = "0.4"
 
 # HTTP server (for MCP)
-axum = "0.7"
+axum = { version = "0.7", features = ["ws"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors"] }
+
+# PTY for terminal-in-browser
+portable-pty = "0.8"
+futures-util = "0.3"
 
 # Error handling
 anyhow = "1.0"

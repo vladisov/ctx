@@ -25,3 +25,8 @@ tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }
 blake3 = { workspace = true }
+axum = { workspace = true }
+tower-http = { workspace = true }
+portable-pty = { workspace = true }
+futures-util = { workspace = true }
+serde = { workspace = true }

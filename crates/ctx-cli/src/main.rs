@@ -43,6 +43,12 @@ async fn main() -> Result<()> {
                 commands::mcp::handle(&storage, host, port, read_only).await
             }
         }
-        cli::Commands::Ui => commands::ui::handle(&storage).await,
+        cli::Commands::Ui { web, port } => {
+            if web {
+                commands::web::handle(port, cli.data_dir.as_deref()).await
+            } else {
+                commands::ui::handle(&storage).await
+            }
+        }
     }
 }

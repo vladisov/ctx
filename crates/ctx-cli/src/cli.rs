@@ -42,8 +42,16 @@ pub enum Commands {
         read_only: bool,
     },
 
-    /// Launch interactive TUI
-    Ui,
+    /// Launch interactive UI
+    Ui {
+        /// Launch web UI instead of terminal UI
+        #[arg(long)]
+        web: bool,
+
+        /// Port for web UI (default: 17380)
+        #[arg(long, default_value = "17380")]
+        port: u16,
+    },
 }
 
 #[derive(Subcommand)]
