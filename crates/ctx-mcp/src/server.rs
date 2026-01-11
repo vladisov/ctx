@@ -49,14 +49,11 @@ impl McpServer {
             .allow_headers(Any);
 
         let app = Router::new()
-            // Streamable HTTP MCP endpoint
-            .route("/mcp", post(handle_mcp_post))
-            .route("/mcp", get(handle_mcp_get))
-            // Legacy endpoints
             .route("/", get(handle_info))
             .route("/", post(handle_mcp_post))
-            // SSE endpoint (alternative path)
-            .route("/sse", get(handle_mcp_get))
+            .route("/mcp", get(handle_info))
+            .route("/mcp", post(handle_mcp_post))
+            .route("/sse", get(handle_info))
             .route("/sse", post(handle_mcp_post))
             .layer(cors)
             .with_state(app_state);
@@ -74,16 +71,6 @@ impl McpServer {
 
 /// GET handler for server info/health check
 async fn handle_info() -> Json<serde_json::Value> {
-    Json(serde_json::json!({
-        "name": "ctx",
-        "version": env!("CARGO_PKG_VERSION"),
-        "protocol": "mcp",
-        "protocolVersion": "2025-03-26"
-    }))
-}
-
-/// GET /mcp - Returns server info (stateless mode)
-async fn handle_mcp_get() -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "name": "ctx",
         "version": env!("CARGO_PKG_VERSION"),

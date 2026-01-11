@@ -46,9 +46,14 @@ async fn handle_request(server: &Arc<McpServer>, req: JsonRpcRequest) -> JsonRpc
     match req.method.as_str() {
         "initialize" => {
             let result = serde_json::json!({
-                "protocolVersion": "2024-11-05",
-                "capabilities": { "tools": {} },
-                "serverInfo": { "name": "ctx", "version": "0.1.0" }
+                "protocolVersion": "2025-03-26",
+                "capabilities": {
+                    "tools": { "listChanged": false }
+                },
+                "serverInfo": {
+                    "name": "ctx",
+                    "version": env!("CARGO_PKG_VERSION")
+                }
             });
             JsonRpcResponse::success(req.id, result)
         }
@@ -64,6 +69,6 @@ async fn handle_request(server: &Arc<McpServer>, req: JsonRpcRequest) -> JsonRpc
             Ok(result) => JsonRpcResponse::success(req.id, result),
             Err(e) => JsonRpcResponse::error(req.id, -32000, &e.to_string()),
         },
-        _ => JsonRpcResponse::error(req.id, -32601, &format!("Method not found: {}", req.method)),
+        _ => JsonRpcResponse::error(req.id, -32601, "Method not found"),
     }
 }
