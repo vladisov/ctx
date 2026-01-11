@@ -1,5 +1,7 @@
 use axum::{
-    extract::State,
+    extract::{Path, State},
+    http::StatusCode,
+    response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
 };
@@ -8,6 +10,7 @@ use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::info;
 
+use ctx_core::RenderRequest;
 use ctx_engine::Renderer;
 use ctx_storage::Storage;
 
@@ -49,12 +52,17 @@ impl McpServer {
             .allow_headers(Any);
 
         let app = Router::new()
+            // MCP endpoints
             .route("/", get(handle_info))
             .route("/", post(handle_mcp_post))
             .route("/mcp", get(handle_info))
             .route("/mcp", post(handle_mcp_post))
             .route("/sse", get(handle_info))
             .route("/sse", post(handle_mcp_post))
+            // REST API endpoints (for ChatGPT Actions, Gemini, etc.)
+            .route("/api/packs", get(api_list_packs))
+            .route("/api/packs/:name", get(api_get_pack))
+            .route("/api/packs/:name/render", get(api_render_pack))
             .layer(cors)
             .with_state(app_state);
 
@@ -122,5 +130,54 @@ async fn process_jsonrpc(state: &AppState, req: JsonRpcRequest) -> JsonRpcRespon
             Err(e) => JsonRpcResponse::error(req.id, -32000, &e.to_string()),
         },
         _ => JsonRpcResponse::error(req.id, -32601, "Method not found"),
+    }
+}
+
+// ============================================================================
+// REST API handlers (for ChatGPT Actions, Gemini Extensions, etc.)
+// ============================================================================
+
+/// GET /api/packs - List all packs
+async fn api_list_packs(State(state): State<AppState>) -> Response {
+    match state.server.db.list_packs().await {
+        Ok(packs) => Json(packs).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
+}
+
+/// GET /api/packs/:name - Get pack details
+async fn api_get_pack(State(state): State<AppState>, Path(name): Path<String>) -> Response {
+    match state.server.db.get_pack(&name).await {
+        Ok(pack) => Json(pack).into_response(),
+        Err(_) => (StatusCode::NOT_FOUND, format!("Pack '{}' not found", name)).into_response(),
+    }
+}
+
+/// GET /api/packs/:name/render - Render pack content
+async fn api_render_pack(State(state): State<AppState>, Path(name): Path<String>) -> Response {
+    // First get the pack to verify it exists
+    let pack = match state.server.db.get_pack(&name).await {
+        Ok(p) => p,
+        Err(_) => {
+            return (StatusCode::NOT_FOUND, format!("Pack '{}' not found", name)).into_response()
+        }
+    };
+
+    // Render the pack
+    match state
+        .server
+        .renderer
+        .render_request(RenderRequest {
+            pack_ids: vec![pack.id],
+        })
+        .await
+    {
+        Ok(result) => Json(serde_json::json!({
+            "pack": name,
+            "token_estimate": result.token_estimate,
+            "content": result.payload.unwrap_or_default()
+        }))
+        .into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     }
 }
