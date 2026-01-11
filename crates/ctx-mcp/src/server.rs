@@ -1,4 +1,8 @@
-use axum::{extract::State, routing::post, Json, Router};
+use axum::{
+    extract::State,
+    routing::{get, post},
+    Json, Router,
+};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
@@ -45,7 +49,15 @@ impl McpServer {
             .allow_headers(Any);
 
         let app = Router::new()
-            .route("/", post(handle_jsonrpc))
+            // Streamable HTTP MCP endpoint
+            .route("/mcp", post(handle_mcp_post))
+            .route("/mcp", get(handle_mcp_get))
+            // Legacy endpoints
+            .route("/", get(handle_info))
+            .route("/", post(handle_mcp_post))
+            // SSE endpoint (alternative path)
+            .route("/sse", get(handle_mcp_get))
+            .route("/sse", post(handle_mcp_post))
             .layer(cors)
             .with_state(app_state);
 
@@ -60,41 +72,68 @@ impl McpServer {
     }
 }
 
-async fn handle_jsonrpc(
+/// GET handler for server info/health check
+async fn handle_info() -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "name": "ctx",
+        "version": env!("CARGO_PKG_VERSION"),
+        "protocol": "mcp",
+        "protocolVersion": "2025-03-26"
+    }))
+}
+
+/// GET /mcp - Returns server info (stateless mode)
+async fn handle_mcp_get() -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "name": "ctx",
+        "version": env!("CARGO_PKG_VERSION"),
+        "protocol": "mcp",
+        "protocolVersion": "2025-03-26"
+    }))
+}
+
+/// POST /mcp - Handle JSON-RPC messages (stateless mode)
+async fn handle_mcp_post(
     State(state): State<AppState>,
     Json(req): Json<JsonRpcRequest>,
 ) -> Json<JsonRpcResponse> {
+    Json(process_jsonrpc(&state, req).await)
+}
+
+async fn process_jsonrpc(state: &AppState, req: JsonRpcRequest) -> JsonRpcResponse {
     match req.method.as_str() {
         "initialize" => {
             // MCP protocol initialization
             let result = serde_json::json!({
-                "protocolVersion": "2024-11-05",
+                "protocolVersion": "2025-03-26",
                 "capabilities": {
-                    "tools": {}
+                    "tools": {
+                        "listChanged": false
+                    }
                 },
                 "serverInfo": {
                     "name": "ctx",
-                    "version": "0.1.0"
+                    "version": env!("CARGO_PKG_VERSION")
                 }
             });
-            Json(JsonRpcResponse::success(req.id, result))
+            JsonRpcResponse::success(req.id, result)
         }
-        "initialized" => {
-            // Notification - no response needed, but we return empty success
-            Json(JsonRpcResponse::success(req.id, serde_json::json!({})))
+        "initialized" | "notifications/initialized" => {
+            // Notification - no response needed, but return empty success
+            JsonRpcResponse::success(req.id, serde_json::json!({}))
         }
         "ping" => {
-            // Health check - just return empty success
-            Json(JsonRpcResponse::success(req.id, serde_json::json!({})))
+            // Health check
+            JsonRpcResponse::success(req.id, serde_json::json!({}))
         }
         "tools/list" => {
             let tools = list_tools(state.server.read_only);
-            Json(JsonRpcResponse::success(req.id, tools))
+            JsonRpcResponse::success(req.id, tools)
         }
         "tools/call" => match call_tool(&state.server, &req.params).await {
-            Ok(result) => Json(JsonRpcResponse::success(req.id, result)),
-            Err(e) => Json(JsonRpcResponse::error(req.id, -32000, &e.to_string())),
+            Ok(result) => JsonRpcResponse::success(req.id, result),
+            Err(e) => JsonRpcResponse::error(req.id, -32000, &e.to_string()),
         },
-        _ => Json(JsonRpcResponse::error(req.id, -32601, "Method not found")),
+        _ => JsonRpcResponse::error(req.id, -32601, "Method not found"),
     }
 }
