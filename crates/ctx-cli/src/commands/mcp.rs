@@ -50,9 +50,7 @@ async fn start_ngrok_tunnel(port: u16) -> Result<Child> {
     // Query ngrok API for public URL
     match get_ngrok_url().await {
         Ok(url) => {
-            eprintln!("========================================");
-            eprintln!("Public URL: {}", url);
-            eprintln!("========================================");
+            print_tunnel_info(&url);
         }
         Err(e) => {
             eprintln!("Warning: Could not get ngrok URL: {}", e);
@@ -61,6 +59,36 @@ async fn start_ngrok_tunnel(port: u16) -> Result<Child> {
     }
 
     Ok(child)
+}
+
+fn print_tunnel_info(url: &str) {
+    eprintln!();
+    eprintln!("══════════════════════════════════════════════════════════════");
+    eprintln!("  ctx MCP Server - Public Tunnel Active");
+    eprintln!("══════════════════════════════════════════════════════════════");
+    eprintln!();
+    eprintln!("  Public URL: {}", url);
+    eprintln!();
+    eprintln!("  REST API Endpoints (for ChatGPT Actions, Gemini, etc.):");
+    eprintln!("    GET {}/api/packs              List all packs", url);
+    eprintln!("    GET {}/api/packs/:name        Get pack details", url);
+    eprintln!(
+        "    GET {}/api/packs/:name/render Get rendered content",
+        url
+    );
+    eprintln!();
+    eprintln!("  ─────────────────────────────────────────────────────────────");
+    eprintln!("  Copy this for AI tools:");
+    eprintln!("  ─────────────────────────────────────────────────────────────");
+    eprintln!();
+    eprintln!("  This is a ctx context pack server. To retrieve context:");
+    eprintln!("  1. GET {}/api/packs to list available packs", url);
+    eprintln!("  2. GET {}/api/packs/PACK_NAME/render to get content", url);
+    eprintln!("  The render endpoint returns JSON with 'content' field");
+    eprintln!("  containing the full context to use in your responses.");
+    eprintln!();
+    eprintln!("══════════════════════════════════════════════════════════════");
+    eprintln!();
 }
 
 async fn get_ngrok_url() -> Result<String> {
