@@ -40,6 +40,10 @@ pub enum Commands {
 
         #[arg(long)]
         read_only: bool,
+
+        /// Start ngrok tunnel for public access
+        #[arg(long)]
+        tunnel: bool,
     },
 
     /// Launch interactive UI

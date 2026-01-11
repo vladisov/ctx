@@ -33,6 +33,7 @@ async fn main() -> Result<()> {
             port,
             host,
             read_only,
+            tunnel,
         } => {
             let read_only = read_only || config.mcp.read_only;
             if stdio {
@@ -40,7 +41,7 @@ async fn main() -> Result<()> {
             } else {
                 let port = port.unwrap_or(config.mcp.port);
                 let host = host.unwrap_or(config.mcp.host);
-                commands::mcp::handle(&storage, host, port, read_only).await
+                commands::mcp::handle(&storage, host, port, read_only, tunnel).await
             }
         }
         cli::Commands::Ui { web, port } => {

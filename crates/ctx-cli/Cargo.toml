@@ -30,3 +30,4 @@ tower-http = { workspace = true }
 portable-pty = { workspace = true }
 futures-util = { workspace = true }
 serde = { workspace = true }
+reqwest = { workspace = true }
