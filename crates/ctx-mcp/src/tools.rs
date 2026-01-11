@@ -1,7 +1,38 @@
+use crate::protocol::{JsonRpcRequest, JsonRpcResponse};
 use crate::server::McpServer;
 use ctx_core::{OrderingStrategy, Pack, RenderPolicy, RenderRequest};
 use ctx_sources::{SourceHandlerRegistry, SourceOptions};
 use serde_json::json;
+
+/// Helper to extract a required string argument
+fn required_str<'a>(args: &'a serde_json::Value, key: &str) -> anyhow::Result<&'a str> {
+    args[key]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing {} parameter", key))
+}
+
+/// Shared JSON-RPC request handler for both HTTP and stdio transports
+pub async fn handle_jsonrpc(server: &McpServer, req: JsonRpcRequest) -> JsonRpcResponse {
+    match req.method.as_str() {
+        "initialize" => JsonRpcResponse::success(
+            req.id,
+            json!({
+                "protocolVersion": "2025-03-26",
+                "capabilities": { "tools": { "listChanged": false } },
+                "serverInfo": { "name": "ctx", "version": env!("CARGO_PKG_VERSION") }
+            }),
+        ),
+        "initialized" | "notifications/initialized" | "ping" => {
+            JsonRpcResponse::success(req.id, json!({}))
+        }
+        "tools/list" => JsonRpcResponse::success(req.id, list_tools(server.read_only)),
+        "tools/call" => match call_tool(server, &req.params).await {
+            Ok(result) => JsonRpcResponse::success(req.id, result),
+            Err(e) => JsonRpcResponse::error(req.id, -32000, &e.to_string()),
+        },
+        _ => JsonRpcResponse::error(req.id, -32601, "Method not found"),
+    }
+}
 
 pub async fn call_tool(
     server: &McpServer,
@@ -18,10 +49,7 @@ pub async fn call_tool(
             serde_json::to_string_pretty(&packs)?
         }
         "ctx_packs_get" => {
-            let pack_name = args["pack"]
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("Missing pack parameter"))?;
-            let pack = server.db.get_pack(pack_name).await?;
+            let pack = server.db.get_pack(required_str(args, "pack")?).await?;
             serde_json::to_string_pretty(&pack)?
         }
         "ctx_packs_preview" => {
@@ -43,9 +71,7 @@ pub async fn call_tool(
             if server.read_only {
                 anyhow::bail!("Server is in read-only mode");
             }
-            let name = args["name"]
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("Missing name parameter"))?;
+            let name = required_str(args, "name")?;
             let budget = args["budget"].as_u64().unwrap_or(128000) as usize;
 
             let pack = Pack::new(
@@ -66,12 +92,8 @@ pub async fn call_tool(
             if server.read_only {
                 anyhow::bail!("Server is in read-only mode");
             }
-            let pack_name = args["pack"]
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("Missing pack parameter"))?;
-            let source = args["source"]
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("Missing source parameter"))?;
+            let pack_name = required_str(args, "pack")?;
+            let source = required_str(args, "source")?;
             let priority = args["priority"].as_i64().unwrap_or(0);
 
             let pack = server.db.get_pack(pack_name).await?;
@@ -111,13 +133,8 @@ pub async fn call_tool(
             if server.read_only {
                 anyhow::bail!("Server is in read-only mode");
             }
-            let pack_name = args["pack"]
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("Missing pack parameter"))?;
-
-            let pack = server.db.get_pack(pack_name).await?;
+            let pack = server.db.get_pack(required_str(args, "pack")?).await?;
             server.db.delete_pack(&pack.id).await?;
-
             format!("Deleted pack '{}'", pack.name)
         }
         _ => anyhow::bail!("Unknown tool: {}", tool_name),

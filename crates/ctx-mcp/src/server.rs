@@ -5,7 +5,10 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use serde::Deserialize;
 use std::sync::Arc;
+
+use ctx_core::{Artifact, ArtifactType, Pack, RenderPolicy};
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::info;
@@ -15,7 +18,23 @@ use ctx_engine::Renderer;
 use ctx_storage::Storage;
 
 use crate::protocol::{JsonRpcRequest, JsonRpcResponse};
-use crate::tools::{call_tool, list_tools};
+use crate::tools::handle_jsonrpc;
+
+// Request body structs for REST API
+#[derive(Deserialize)]
+struct CreatePackRequest {
+    name: String,
+    #[serde(default)]
+    budget_tokens: Option<usize>,
+}
+
+#[derive(Deserialize)]
+struct AddArtifactRequest {
+    #[serde(flatten)]
+    artifact_type: ArtifactType,
+    #[serde(default)]
+    priority: Option<i64>,
+}
 
 pub struct McpServer {
     pub db: Arc<Storage>,
@@ -60,9 +79,13 @@ impl McpServer {
             .route("/sse", get(handle_info))
             .route("/sse", post(handle_mcp_post))
             // REST API endpoints (for ChatGPT Actions, Gemini, etc.)
-            .route("/api/packs", get(api_list_packs))
-            .route("/api/packs/:name", get(api_get_pack))
+            .route("/api/packs", get(api_list_packs).post(api_create_pack))
+            .route(
+                "/api/packs/:name",
+                get(api_get_pack).delete(api_delete_pack),
+            )
             .route("/api/packs/:name/render", get(api_render_pack))
+            .route("/api/packs/:name/artifacts", post(api_add_artifact))
             .layer(cors)
             .with_state(app_state);
 
@@ -92,45 +115,7 @@ async fn handle_mcp_post(
     State(state): State<AppState>,
     Json(req): Json<JsonRpcRequest>,
 ) -> Json<JsonRpcResponse> {
-    Json(process_jsonrpc(&state, req).await)
-}
-
-async fn process_jsonrpc(state: &AppState, req: JsonRpcRequest) -> JsonRpcResponse {
-    match req.method.as_str() {
-        "initialize" => {
-            // MCP protocol initialization
-            let result = serde_json::json!({
-                "protocolVersion": "2025-03-26",
-                "capabilities": {
-                    "tools": {
-                        "listChanged": false
-                    }
-                },
-                "serverInfo": {
-                    "name": "ctx",
-                    "version": env!("CARGO_PKG_VERSION")
-                }
-            });
-            JsonRpcResponse::success(req.id, result)
-        }
-        "initialized" | "notifications/initialized" => {
-            // Notification - no response needed, but return empty success
-            JsonRpcResponse::success(req.id, serde_json::json!({}))
-        }
-        "ping" => {
-            // Health check
-            JsonRpcResponse::success(req.id, serde_json::json!({}))
-        }
-        "tools/list" => {
-            let tools = list_tools(state.server.read_only);
-            JsonRpcResponse::success(req.id, tools)
-        }
-        "tools/call" => match call_tool(&state.server, &req.params).await {
-            Ok(result) => JsonRpcResponse::success(req.id, result),
-            Err(e) => JsonRpcResponse::error(req.id, -32000, &e.to_string()),
-        },
-        _ => JsonRpcResponse::error(req.id, -32601, "Method not found"),
-    }
+    Json(handle_jsonrpc(&state.server, req).await)
 }
 
 // ============================================================================
@@ -178,6 +163,126 @@ async fn api_render_pack(State(state): State<AppState>, Path(name): Path<String>
             "content": result.payload.unwrap_or_default()
         }))
         .into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
+}
+
+/// POST /api/packs - Create a new pack
+async fn api_create_pack(
+    State(state): State<AppState>,
+    Json(req): Json<CreatePackRequest>,
+) -> Response {
+    if state.server.read_only {
+        return (StatusCode::FORBIDDEN, "Server is in read-only mode").into_response();
+    }
+
+    let policies = RenderPolicy {
+        budget_tokens: req.budget_tokens.unwrap_or(128000),
+        ..Default::default()
+    };
+
+    let pack = Pack::new(req.name.clone(), policies);
+
+    match state.server.db.create_pack(&pack).await {
+        Ok(()) => (
+            StatusCode::CREATED,
+            Json(serde_json::json!({
+                "id": pack.id,
+                "name": pack.name,
+                "message": format!("Pack '{}' created", req.name)
+            })),
+        )
+            .into_response(),
+        Err(e) => {
+            let status = if e.to_string().contains("already exists") {
+                StatusCode::CONFLICT
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+            (status, e.to_string()).into_response()
+        }
+    }
+}
+
+/// DELETE /api/packs/:name - Delete a pack
+async fn api_delete_pack(State(state): State<AppState>, Path(name): Path<String>) -> Response {
+    if state.server.read_only {
+        return (StatusCode::FORBIDDEN, "Server is in read-only mode").into_response();
+    }
+
+    // First get the pack to get its ID
+    let pack = match state.server.db.get_pack(&name).await {
+        Ok(p) => p,
+        Err(_) => {
+            return (StatusCode::NOT_FOUND, format!("Pack '{}' not found", name)).into_response()
+        }
+    };
+
+    match state.server.db.delete_pack(&pack.id).await {
+        Ok(()) => Json(serde_json::json!({
+            "message": format!("Pack '{}' deleted", name)
+        }))
+        .into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
+}
+
+/// POST /api/packs/:name/artifacts - Add artifact to a pack
+async fn api_add_artifact(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+    Json(req): Json<AddArtifactRequest>,
+) -> Response {
+    if state.server.read_only {
+        return (StatusCode::FORBIDDEN, "Server is in read-only mode").into_response();
+    }
+
+    // First get the pack to get its ID
+    let pack = match state.server.db.get_pack(&name).await {
+        Ok(p) => p,
+        Err(_) => {
+            return (StatusCode::NOT_FOUND, format!("Pack '{}' not found", name)).into_response()
+        }
+    };
+
+    // Create source_uri from artifact type
+    let source_uri = match &req.artifact_type {
+        ArtifactType::File { path } => format!("file://{}", path),
+        ArtifactType::FileRange { path, start, end } => {
+            format!("file://{}#L{}-L{}", path, start, end)
+        }
+        ArtifactType::Markdown { path } => format!("md://{}", path),
+        ArtifactType::CollectionMdDir { path, .. } => format!("mddir://{}", path),
+        ArtifactType::CollectionGlob { pattern } => format!("glob://{}", pattern),
+        ArtifactType::Text { .. } => "text://inline".to_string(),
+        ArtifactType::GitDiff { base, head } => {
+            format!("git://diff/{}..{}", base, head.as_deref().unwrap_or("HEAD"))
+        }
+    };
+
+    let artifact = Artifact::new(req.artifact_type.clone(), source_uri);
+    let priority = req.priority.unwrap_or(0);
+
+    // Extract content for Text artifacts, empty string for others
+    let content = match &req.artifact_type {
+        ArtifactType::Text { content } => content.as_str(),
+        _ => "",
+    };
+
+    match state
+        .server
+        .db
+        .add_artifact_to_pack_with_content(&pack.id, &artifact, content, priority)
+        .await
+    {
+        Ok(_) => (
+            StatusCode::CREATED,
+            Json(serde_json::json!({
+                "artifact_id": artifact.id,
+                "message": format!("Artifact added to pack '{}'", name)
+            })),
+        )
+            .into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     }
 }

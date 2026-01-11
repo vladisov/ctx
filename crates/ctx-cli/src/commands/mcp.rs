@@ -69,23 +69,50 @@ fn print_tunnel_info(url: &str) {
     eprintln!();
     eprintln!("  Public URL: {}", url);
     eprintln!();
-    eprintln!("  REST API Endpoints (for ChatGPT Actions, Gemini, etc.):");
-    eprintln!("    GET {}/api/packs              List all packs", url);
-    eprintln!("    GET {}/api/packs/:name        Get pack details", url);
+    eprintln!("  REST API Endpoints:");
+    eprintln!();
+    eprintln!("  Read operations:");
+    eprintln!("    GET  {}/api/packs                 List all packs", url);
     eprintln!(
-        "    GET {}/api/packs/:name/render Get rendered content",
+        "    GET  {}/api/packs/:name           Get pack details",
         url
     );
+    eprintln!(
+        "    GET  {}/api/packs/:name/render    Get rendered content",
+        url
+    );
+    eprintln!();
+    eprintln!("  Write operations:");
+    eprintln!(
+        "    POST   {}/api/packs               Create pack (body: {{\"name\": \"...\", \"budget_tokens\": 128000}})",
+        url
+    );
+    eprintln!("    DELETE {}/api/packs/:name         Delete pack", url);
+    eprintln!("    POST   {}/api/packs/:name/artifacts  Add artifact", url);
     eprintln!();
     eprintln!("  ─────────────────────────────────────────────────────────────");
     eprintln!("  Copy this for AI tools:");
     eprintln!("  ─────────────────────────────────────────────────────────────");
     eprintln!();
-    eprintln!("  This is a ctx context pack server. To retrieve context:");
-    eprintln!("  1. GET {}/api/packs to list available packs", url);
-    eprintln!("  2. GET {}/api/packs/PACK_NAME/render to get content", url);
-    eprintln!("  The render endpoint returns JSON with 'content' field");
-    eprintln!("  containing the full context to use in your responses.");
+    eprintln!("  This is a ctx context pack server. Available operations:");
+    eprintln!();
+    eprintln!("  Reading context:");
+    eprintln!("  - GET {}/api/packs to list available packs", url);
+    eprintln!("  - GET {}/api/packs/PACK_NAME/render to get content", url);
+    eprintln!("    Returns JSON with 'content' field containing full context.");
+    eprintln!();
+    eprintln!("  Managing packs:");
+    eprintln!(
+        "  - POST {}/api/packs with {{\"name\": \"pack-name\"}} to create",
+        url
+    );
+    eprintln!("  - DELETE {}/api/packs/PACK_NAME to delete", url);
+    eprintln!(
+        "  - POST {}/api/packs/PACK_NAME/artifacts with artifact type:",
+        url
+    );
+    eprintln!("      {{\"type\": \"text\", \"content\": \"...\"}} for inline text");
+    eprintln!("      {{\"type\": \"file\", \"path\": \"/path/to/file\"}} for files");
     eprintln!();
     eprintln!("══════════════════════════════════════════════════════════════");
     eprintln!();
