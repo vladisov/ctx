@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{delete, get, post},
     Json, Router,
 };
 use serde::Deserialize;
@@ -85,7 +85,14 @@ impl McpServer {
                 get(api_get_pack).delete(api_delete_pack),
             )
             .route("/api/packs/:name/render", get(api_render_pack))
-            .route("/api/packs/:name/artifacts", post(api_add_artifact))
+            .route(
+                "/api/packs/:name/artifacts",
+                get(api_list_pack_artifacts).post(api_add_artifact),
+            )
+            .route(
+                "/api/packs/:name/artifacts/:artifact_id",
+                delete(api_remove_artifact),
+            )
             .layer(cors)
             .with_state(app_state);
 
@@ -284,5 +291,62 @@ async fn api_add_artifact(
         )
             .into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
+}
+
+/// GET /api/packs/:name/artifacts - List artifacts in a pack
+async fn api_list_pack_artifacts(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+) -> Response {
+    // First get the pack to get its ID
+    let pack = match state.server.db.get_pack(&name).await {
+        Ok(p) => p,
+        Err(_) => {
+            return (StatusCode::NOT_FOUND, format!("Pack '{}' not found", name)).into_response()
+        }
+    };
+
+    match state.server.db.get_pack_artifacts(&pack.id).await {
+        Ok(items) => Json(items).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
+}
+
+/// DELETE /api/packs/:name/artifacts/:artifact_id - Remove artifact from pack
+async fn api_remove_artifact(
+    State(state): State<AppState>,
+    Path((name, artifact_id)): Path<(String, String)>,
+) -> Response {
+    if state.server.read_only {
+        return (StatusCode::FORBIDDEN, "Server is in read-only mode").into_response();
+    }
+
+    // First get the pack to get its ID
+    let pack = match state.server.db.get_pack(&name).await {
+        Ok(p) => p,
+        Err(_) => {
+            return (StatusCode::NOT_FOUND, format!("Pack '{}' not found", name)).into_response()
+        }
+    };
+
+    match state
+        .server
+        .db
+        .remove_artifact_from_pack(&pack.id, &artifact_id)
+        .await
+    {
+        Ok(()) => Json(serde_json::json!({
+            "message": format!("Artifact '{}' removed from pack '{}'", artifact_id, name)
+        }))
+        .into_response(),
+        Err(e) => {
+            let status = if e.to_string().contains("not found") {
+                StatusCode::NOT_FOUND
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+            (status, e.to_string()).into_response()
+        }
     }
 }

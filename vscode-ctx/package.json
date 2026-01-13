@@ -1,0 +1,231 @@
+{
+  "name": "vscode-ctx",
+  "displayName": "ctx - Context Pack Manager",
+  "description": "Manage LLM context packs with ctx",
+  "version": "0.1.0",
+  "publisher": "ctx",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vladisov/ctx"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [
+    "onStartupFinished",
+    "workspaceContains:ctx.toml"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "ctx",
+      "properties": {
+        "ctx.server.host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "Host for ctx MCP server"
+        },
+        "ctx.server.port": {
+          "type": "number",
+          "default": 17373,
+          "description": "Port for ctx MCP server"
+        },
+        "ctx.server.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start ctx MCP server if not running"
+        },
+        "ctx.ctxBinaryPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to ctx binary (leave empty to use PATH)"
+        },
+        "ctx.defaultTokenBudget": {
+          "type": "number",
+          "default": 128000,
+          "description": "Default token budget for new packs"
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ctx-explorer",
+          "title": "ctx Packs",
+          "icon": "$(package)"
+        }
+      ]
+    },
+    "views": {
+      "ctx-explorer": [
+        {
+          "id": "ctx.packsView",
+          "name": "Packs",
+          "contextualTitle": "Context Packs"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "ctx.refreshPacks",
+        "title": "Refresh Packs",
+        "icon": "$(refresh)",
+        "category": "ctx"
+      },
+      {
+        "command": "ctx.createPack",
+        "title": "Create Pack",
+        "icon": "$(add)",
+        "category": "ctx"
+      },
+      {
+        "command": "ctx.deletePack",
+        "title": "Delete Pack",
+        "icon": "$(trash)",
+        "category": "ctx"
+      },
+      {
+        "command": "ctx.previewPack",
+        "title": "Preview Pack",
+        "icon": "$(preview)",
+        "category": "ctx"
+      },
+      {
+        "command": "ctx.addFileToPack",
+        "title": "Add to ctx Pack...",
+        "category": "ctx"
+      },
+      {
+        "command": "ctx.addSelectionToPack",
+        "title": "Add Selection to ctx Pack...",
+        "category": "ctx"
+      },
+      {
+        "command": "ctx.removeArtifact",
+        "title": "Remove Artifact",
+        "icon": "$(remove)",
+        "category": "ctx"
+      },
+      {
+        "command": "ctx.syncFromToml",
+        "title": "Sync Packs from ctx.toml",
+        "category": "ctx"
+      },
+      {
+        "command": "ctx.saveToToml",
+        "title": "Save Pack to ctx.toml",
+        "category": "ctx"
+      },
+      {
+        "command": "ctx.initCtxToml",
+        "title": "Initialize ctx.toml",
+        "category": "ctx"
+      },
+      {
+        "command": "ctx.startServer",
+        "title": "Start ctx Server",
+        "category": "ctx"
+      },
+      {
+        "command": "ctx.stopServer",
+        "title": "Stop ctx Server",
+        "category": "ctx"
+      },
+      {
+        "command": "ctx.copyPackContent",
+        "title": "Copy Rendered Content",
+        "category": "ctx"
+      },
+      {
+        "command": "ctx.showStatusMenu",
+        "title": "Show ctx Status",
+        "category": "ctx"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "ctx.refreshPacks",
+          "when": "view == ctx.packsView",
+          "group": "navigation"
+        },
+        {
+          "command": "ctx.createPack",
+          "when": "view == ctx.packsView",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "ctx.previewPack",
+          "when": "view == ctx.packsView && viewItem == pack",
+          "group": "inline"
+        },
+        {
+          "command": "ctx.deletePack",
+          "when": "view == ctx.packsView && viewItem == pack",
+          "group": "inline"
+        },
+        {
+          "command": "ctx.saveToToml",
+          "when": "view == ctx.packsView && viewItem == pack && ctx.hasCtxToml",
+          "group": "1_toml"
+        },
+        {
+          "command": "ctx.copyPackContent",
+          "when": "view == ctx.packsView && viewItem == pack",
+          "group": "2_actions"
+        },
+        {
+          "command": "ctx.removeArtifact",
+          "when": "view == ctx.packsView && viewItem == artifact",
+          "group": "inline"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "ctx.addFileToPack",
+          "when": "resourceScheme == file",
+          "group": "ctx@1"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "ctx.addSelectionToPack",
+          "when": "editorHasSelection",
+          "group": "ctx@1"
+        },
+        {
+          "command": "ctx.addFileToPack",
+          "when": "editorTextFocus",
+          "group": "ctx@2"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "ctx.addSelectionToPack",
+        "key": "ctrl+shift+c a",
+        "mac": "cmd+shift+c a",
+        "when": "editorHasSelection"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run esbuild-base -- --minify",
+    "esbuild-base": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
+    "compile": "npm run esbuild-base -- --sourcemap",
+    "watch": "npm run esbuild-base -- --sourcemap --watch",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "esbuild": "^0.19.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.3.0"
+  }
+}
