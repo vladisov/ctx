@@ -102,10 +102,6 @@ export class PacksTreeProvider implements vscode.TreeDataProvider<TreeItem> {
     this._onDidChangeTreeData.fire();
   }
 
-  refreshPack(packId: string): void {
-    this._onDidChangeTreeData.fire();
-  }
-
   getTreeItem(element: TreeItem): vscode.TreeItem {
     return element;
   }
@@ -116,7 +112,7 @@ export class PacksTreeProvider implements vscode.TreeDataProvider<TreeItem> {
       try {
         const packs = await this.api.listPacks();
         return packs.map((pack) => {
-          this.packsCache.set(pack.id, pack);
+          this.packsCache.set(pack.name, pack);
           return new PackTreeItem(pack);
         });
       } catch (err) {

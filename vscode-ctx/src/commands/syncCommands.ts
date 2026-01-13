@@ -8,11 +8,9 @@ export function registerSyncCommands(
   context: vscode.ExtensionContext,
   treeProvider: PacksTreeProvider
 ): void {
-  const config = getConfig();
-  const ctxPath = config.get<string>("ctxBinaryPath") || "ctx";
-
   // Helper: Run ctx CLI command
   function runCtxCommand(args: string[], cwd: string): Promise<string> {
+    const ctxPath = getConfig().get<string>("ctxBinaryPath") || "ctx";
     return new Promise((resolve, reject) => {
       cp.exec(`"${ctxPath}" ${args.join(" ")}`, { cwd }, (error, stdout, stderr) => {
         if (error) {
