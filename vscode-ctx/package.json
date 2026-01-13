@@ -53,7 +53,7 @@
         {
           "id": "ctx-explorer",
           "title": "ctx Packs",
-          "icon": "$(package)"
+          "icon": "media/icons/ctx.svg"
         }
       ]
     },
