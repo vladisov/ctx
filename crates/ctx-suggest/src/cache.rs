@@ -29,9 +29,7 @@ impl GitCoChangeCache {
             return false;
         }
         // Cache is valid for 5 minutes
-        self.built_at
-            .map(|t| t.elapsed().as_secs() < 300)
-            .unwrap_or(false)
+        self.built_at.is_some_and(|t| t.elapsed().as_secs() < 300)
     }
 
     pub fn clear(&self) {
@@ -72,9 +70,7 @@ impl ImportGraphCache {
             return false;
         }
         // Import cache is valid for 5 minutes
-        self.built_at
-            .map(|t| t.elapsed().as_secs() < 300)
-            .unwrap_or(false)
+        self.built_at.is_some_and(|t| t.elapsed().as_secs() < 300)
     }
 
     pub fn clear(&self) {

@@ -8,15 +8,15 @@ use std::sync::LazyLock;
 
 // Matches: import foo, bar, baz
 static IMPORT_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"^\s*import\s+([\w.,\s]+)"#).unwrap());
+    LazyLock::new(|| Regex::new(r"^\s*import\s+([\w.,\s]+)").unwrap());
 
 // Matches: from foo.bar import baz
 static FROM_IMPORT_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"^\s*from\s+([\w.]+)\s+import"#).unwrap());
+    LazyLock::new(|| Regex::new(r"^\s*from\s+([\w.]+)\s+import").unwrap());
 
 // Matches: from . import foo (relative import)
 static FROM_RELATIVE_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"^\s*from\s+(\.+[\w.]*)\s+import"#).unwrap());
+    LazyLock::new(|| Regex::new(r"^\s*from\s+(\.+[\w.]*)\s+import").unwrap());
 
 /// Parse imports from a Python file
 pub async fn parse_imports(path: &Path) -> Result<Vec<String>> {
@@ -120,7 +120,7 @@ fn resolve_module_path(base: &Path, parts: &[&str]) -> Option<std::path::PathBuf
 
         if is_last {
             // Try module.py
-            let file_path = current.join(format!("{}.py", part));
+            let file_path = current.join(format!("{part}.py"));
             if file_path.exists() {
                 return Some(file_path);
             }
@@ -132,12 +132,11 @@ fn resolve_module_path(base: &Path, parts: &[&str]) -> Option<std::path::PathBuf
             }
 
             return None;
-        } else {
-            // Navigate into package directory
-            current = current.join(part);
-            if !current.exists() {
-                return None;
-            }
+        }
+        // Navigate into package directory
+        current = current.join(part);
+        if !current.exists() {
+            return None;
         }
     }
 

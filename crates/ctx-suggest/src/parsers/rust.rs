@@ -8,11 +8,11 @@ use std::sync::LazyLock;
 
 // Matches: use crate::foo::bar; use super::baz; use self::qux;
 static USE_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"^\s*use\s+((?:crate|super|self)(?:::\w+)+)"#).unwrap());
+    LazyLock::new(|| Regex::new(r"^\s*use\s+((?:crate|super|self)(?:::\w+)+)").unwrap());
 
 // Matches: mod foo; (without body - external module)
 static MOD_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"^\s*(?:pub\s+)?mod\s+(\w+)\s*;"#).unwrap());
+    LazyLock::new(|| Regex::new(r"^\s*(?:pub\s+)?mod\s+(\w+)\s*;").unwrap());
 
 /// Parse imports from a Rust file
 pub async fn parse_imports(path: &Path) -> Result<Vec<String>> {
@@ -87,7 +87,7 @@ fn resolve_module_path(base: &Path, parts: &[&str]) -> Option<std::path::PathBuf
 
         if is_last {
             // Try module.rs
-            let file_path = current.join(format!("{}.rs", part));
+            let file_path = current.join(format!("{part}.rs"));
             if file_path.exists() {
                 return Some(file_path);
             }
@@ -99,12 +99,11 @@ fn resolve_module_path(base: &Path, parts: &[&str]) -> Option<std::path::PathBuf
             }
 
             return None;
-        } else {
-            // Navigate into directory
-            current = current.join(part);
-            if !current.exists() {
-                return None;
-            }
+        }
+        // Navigate into directory
+        current = current.join(part);
+        if !current.exists() {
+            return None;
         }
     }
 

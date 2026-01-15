@@ -42,7 +42,7 @@ impl ImportSignal {
             .git_ignore(true)
             .build();
 
-        for entry in walker.filter_map(|e| e.ok()) {
+        for entry in walker.filter_map(std::result::Result::ok) {
             let path = entry.path();
             if !path.is_file() {
                 continue;
@@ -54,10 +54,9 @@ impl ImportSignal {
                 continue;
             }
 
-            // Parse imports
-            let raw_imports = match parsers::parse_imports(path).await {
-                Ok(imports) => imports,
-                Err(_) => continue, // Skip files that fail to parse
+            // Parse imports (skip files that fail to parse)
+            let Ok(raw_imports) = parsers::parse_imports(path).await else {
+                continue;
             };
 
             // Resolve imports to file paths
@@ -152,7 +151,7 @@ impl Signal for ImportSignal {
         if let Some(query_imports) = cache.imports.get(query) {
             let query_set: std::collections::HashSet<_> = query_imports.value().iter().collect();
 
-            for entry in cache.imports.iter() {
+            for entry in &cache.imports {
                 let other_path = entry.key();
                 if other_path == query {
                     continue;
@@ -172,7 +171,7 @@ impl Signal for ImportSignal {
         }
 
         // Normalize and return
-        let max_score = scores.values().cloned().fold(0.0_f64, f64::max).max(1.0);
+        let max_score = scores.values().copied().fold(0.0_f64, f64::max).max(1.0);
         let results = scores
             .into_iter()
             .filter(|(path, _)| path.exists())

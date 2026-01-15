@@ -135,7 +135,7 @@ impl Signal for GitCoChangeSignal {
         }
 
         // Normalize scores: max co-change count = 1.0
-        let max_count = cochanges.first().map(|(_, c)| *c).unwrap_or(1) as f64;
+        let max_count = cochanges.first().map_or(1, |(_, c)| *c) as f64;
 
         let results = cochanges
             .iter()
