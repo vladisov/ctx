@@ -34,7 +34,6 @@ impl GitCoChangeSignal {
     fn build_cochange_index(&self, workspace: &Path) -> Result<()> {
         debug!("Building git co-change index for {:?}", workspace);
 
-        // Run git log to get file changes per commit
         let output = Command::new("git")
             .args([
                 "log",
@@ -56,8 +55,6 @@ impl GitCoChangeSignal {
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         let commits = parse_git_log(&stdout);
-
-        // Build co-change counts
         let mut cochange_counts: HashMap<PathBuf, HashMap<PathBuf, usize>> = HashMap::new();
 
         for files in commits {
@@ -82,13 +79,12 @@ impl GitCoChangeSignal {
             }
         }
 
-        // Store in cache, sorted by count
         let mut cache = self.cache.write().unwrap();
         cache.cochanges.clear();
 
         for (file, cochanges) in cochange_counts {
             let mut sorted: Vec<_> = cochanges.into_iter().collect();
-            sorted.sort_by(|a, b| b.1.cmp(&a.1)); // Descending by count
+            sorted.sort_by(|a, b| b.1.cmp(&a.1));
             cache.cochanges.insert(file, sorted);
         }
 
@@ -134,7 +130,6 @@ impl Signal for GitCoChangeSignal {
             return Ok(vec![]);
         }
 
-        // Normalize scores: max co-change count = 1.0
         let max_count = cochanges.first().map_or(1, |(_, c)| *c) as f64;
 
         let results = cochanges
@@ -177,7 +172,6 @@ fn parse_git_log(output: &str) -> Vec<Vec<String>> {
                 commits.push(std::mem::take(&mut current_files));
             }
         } else {
-            // It's a file path
             current_files.push(line.to_string());
         }
     }

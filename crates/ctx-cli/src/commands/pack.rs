@@ -230,14 +230,12 @@ async fn add_related_files(
     priority: i64,
     max_related: usize,
 ) -> Result<()> {
-    // Find workspace root
     let file = std::path::Path::new(file_path);
     let workspace = super::find_workspace_root(file)?;
 
-    // Get suggestions
     let config = SuggestConfig {
         max_results: max_related,
-        min_score: 0.2, // Higher threshold for auto-add
+        min_score: 0.2,
         ..Default::default()
     };
     let engine = SuggestionEngine::new(&workspace, config);
@@ -254,7 +252,6 @@ async fn add_related_files(
         return Ok(());
     }
 
-    // Get existing artifacts in pack to avoid duplicates
     let existing = storage.get_pack_artifacts(&pack.id).await?;
     let existing_paths: std::collections::HashSet<String> = existing
         .iter()
@@ -269,17 +266,13 @@ async fn add_related_files(
     let mut added = 0;
 
     for suggestion in response.suggestions {
-        // Skip if already in pack
         if existing_paths.contains(&suggestion.path) {
             continue;
         }
-
-        // Check denylist
         if denylist.is_denied(&suggestion.path) {
             continue;
         }
 
-        // Add the file
         let source = format!("file:{}", suggestion.path);
         let options = SourceOptions {
             priority,
@@ -293,7 +286,6 @@ async fn add_related_files(
                         .add_artifact_to_pack_with_content(&pack.id, &artifact, &content, priority)
                         .await?;
 
-                    // Make path relative for display
                     let display_path = suggestion
                         .path
                         .strip_prefix(workspace.to_string_lossy().as_ref())
@@ -317,10 +309,7 @@ async fn add_related_files(
 }
 
 async fn remove(storage: &Storage, pack_name: String, artifact_id: String) -> Result<()> {
-    // Get pack
     let pack = storage.get_pack(&pack_name).await?;
-
-    // Remove artifact from pack
     storage
         .remove_artifact_from_pack(&pack.id, &artifact_id)
         .await?;
@@ -591,7 +580,6 @@ async fn lint(storage: &Storage, denylist: &Denylist, pack_name: String, fix: bo
 
     println!("Linting pack: {} ({})", pack.name, pack.id);
 
-    // Collect all file paths in the pack
     let pack_files: std::collections::HashSet<String> = artifacts
         .iter()
         .filter_map(|a| match &a.artifact.artifact_type {
@@ -606,11 +594,8 @@ async fn lint(storage: &Storage, denylist: &Denylist, pack_name: String, fix: bo
         return Ok(());
     }
 
-    // Find workspace root from first file
     let first_file = pack_files.iter().next().unwrap();
     let workspace = super::find_workspace_root(std::path::Path::new(first_file))?;
-
-    // Analyze imports for all files in pack
     let mut missing_deps: std::collections::HashMap<String, Vec<String>> =
         std::collections::HashMap::new();
 
@@ -622,18 +607,14 @@ async fn lint(storage: &Storage, denylist: &Denylist, pack_name: String, fix: bo
             continue;
         }
 
-        // Parse imports
         let imports = match ctx_suggest::parsers::parse_imports(path).await {
             Ok(imports) => imports,
             Err(_) => continue,
         };
 
-        // Resolve imports to file paths
         for import in imports {
             if let Some(resolved) = resolve_import(&workspace, path, ext, &import) {
                 let resolved_str = resolved.to_string_lossy().to_string();
-
-                // Check if resolved file exists but is not in pack
                 if resolved.exists() && !pack_files.contains(&resolved_str) {
                     missing_deps
                         .entry(resolved_str)
@@ -649,7 +630,6 @@ async fn lint(storage: &Storage, denylist: &Denylist, pack_name: String, fix: bo
         return Ok(());
     }
 
-    // Sort by number of importers (most referenced first)
     let mut sorted_deps: Vec<_> = missing_deps.into_iter().collect();
     sorted_deps.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
 

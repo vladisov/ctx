@@ -36,7 +36,6 @@ impl ImportSignal {
         let mut imports_map: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
         let mut imported_by_map: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
 
-        // Walk directory, respecting .gitignore
         let walker = WalkBuilder::new(workspace)
             .hidden(true)
             .git_ignore(true)
@@ -48,18 +47,15 @@ impl ImportSignal {
                 continue;
             }
 
-            // Check if supported extension
             let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
             if !parsers::is_supported_extension(ext) {
                 continue;
             }
 
-            // Parse imports (skip files that fail to parse)
             let Ok(raw_imports) = parsers::parse_imports(path).await else {
                 continue;
             };
 
-            // Resolve imports to file paths
             let mut resolved = Vec::new();
             for import in raw_imports {
                 if let Some(resolved_path) = resolve_import(workspace, path, ext, &import) {
@@ -67,11 +63,9 @@ impl ImportSignal {
                 }
             }
 
-            // Store forward edges
             let path_buf = path.to_owned();
             imports_map.insert(path_buf.clone(), resolved.clone());
 
-            // Store reverse edges
             for target in resolved {
                 imported_by_map
                     .entry(target)
@@ -80,7 +74,6 @@ impl ImportSignal {
             }
         }
 
-        // Update cache
         let mut cache = self.cache.write().unwrap();
         cache.imports.clear();
         cache.imported_by.clear();
@@ -170,7 +163,6 @@ impl Signal for ImportSignal {
             }
         }
 
-        // Normalize and return
         let max_score = scores.values().copied().fold(0.0_f64, f64::max).max(1.0);
         let results = scores
             .into_iter()
