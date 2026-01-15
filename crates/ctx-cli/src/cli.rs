@@ -124,6 +124,14 @@ pub enum PackCommands {
         /// For md_dir: recursive scan
         #[arg(long)]
         recursive: bool,
+
+        /// Also add related files (based on git history and imports)
+        #[arg(long, short = 'r')]
+        with_related: bool,
+
+        /// Max related files to add (default: 5)
+        #[arg(long, default_value = "5")]
+        related_max: usize,
     },
 
     /// Remove an artifact from a pack
@@ -175,5 +183,15 @@ pub enum PackCommands {
         /// Save all packs
         #[arg(long)]
         all: bool,
+    },
+
+    /// Check pack completeness (find missing dependencies)
+    Lint {
+        /// Pack name or ID
+        pack: String,
+
+        /// Auto-fix by adding missing files
+        #[arg(long)]
+        fix: bool,
     },
 }

@@ -4,6 +4,7 @@ use ctx_core::{OrderingStrategy, Pack, RenderPolicy};
 use ctx_engine::Renderer;
 use ctx_sources::{Denylist, SourceHandlerRegistry, SourceOptions};
 use ctx_storage::Storage;
+use ctx_suggest::{SuggestConfig, SuggestRequest, SuggestionEngine};
 use std::path::Path;
 
 use crate::cli::PackCommands;
@@ -26,10 +27,22 @@ pub async fn handle(cmd: PackCommands, storage: &Storage, config: &Config) -> Re
             max_files,
             exclude,
             recursive,
+            with_related,
+            related_max,
         } => {
             add(
-                storage, &denylist, pack, source, priority, start, end, max_files, exclude,
+                storage,
+                &denylist,
+                pack,
+                source,
+                priority,
+                start,
+                end,
+                max_files,
+                exclude,
                 recursive,
+                with_related,
+                related_max,
             )
             .await
         }
@@ -43,6 +56,7 @@ pub async fn handle(cmd: PackCommands, storage: &Storage, config: &Config) -> Re
         PackCommands::Delete { pack, force } => delete(storage, pack, force).await,
         PackCommands::Sync => sync(storage, config, &denylist).await,
         PackCommands::Save { packs, all } => save(storage, packs, all).await,
+        PackCommands::Lint { pack, fix } => lint(storage, &denylist, pack, fix).await,
     }
 }
 
@@ -120,6 +134,8 @@ async fn add(
     max_files: Option<usize>,
     exclude: Vec<String>,
     recursive: bool,
+    with_related: bool,
+    related_max: usize,
 ) -> Result<()> {
     let registry = SourceHandlerRegistry::new();
 
@@ -130,7 +146,7 @@ async fn add(
     let options = SourceOptions {
         range: start.and_then(|s| end.map(|e| (s, e))),
         max_files,
-        exclude,
+        exclude: exclude.clone(),
         recursive,
         priority,
     };
@@ -159,6 +175,13 @@ async fn add(
             | ctx_core::ArtifactType::CollectionGlob { .. }
     );
 
+    // Extract file path for related files lookup
+    let file_path = match &artifact.artifact_type {
+        ctx_core::ArtifactType::File { path } => Some(path.clone()),
+        ctx_core::ArtifactType::FileRange { path, .. } => Some(path.clone()),
+        _ => None,
+    };
+
     if is_collection {
         // Collections don't have content to load immediately
         storage.create_artifact(&artifact).await?;
@@ -180,7 +203,139 @@ async fn add(
     println!("  Source: {}", artifact.source_uri);
     println!("  Priority: {}", priority);
 
+    // Handle --with-related flag
+    if with_related && let Some(file_path) = file_path {
+        add_related_files(
+            storage,
+            denylist,
+            &registry,
+            &pack,
+            &file_path,
+            priority,
+            related_max,
+        )
+        .await?;
+    }
+
     Ok(())
+}
+
+/// Add related files based on suggestions
+async fn add_related_files(
+    storage: &Storage,
+    denylist: &Denylist,
+    registry: &SourceHandlerRegistry,
+    pack: &Pack,
+    file_path: &str,
+    priority: i64,
+    max_related: usize,
+) -> Result<()> {
+    // Find workspace root
+    let file = std::path::Path::new(file_path);
+    let workspace = find_workspace_root(file)?;
+
+    // Get suggestions
+    let config = SuggestConfig {
+        max_results: max_related,
+        min_score: 0.2, // Higher threshold for auto-add
+        ..Default::default()
+    };
+    let engine = SuggestionEngine::new(&workspace, config);
+    let request = SuggestRequest {
+        file: file_path.to_string(),
+        pack_name: Some(pack.name.clone()),
+        max_results: Some(max_related),
+    };
+
+    let response = engine.suggest(&request).await?;
+
+    if response.suggestions.is_empty() {
+        println!("\n  No related files found.");
+        return Ok(());
+    }
+
+    // Get existing artifacts in pack to avoid duplicates
+    let existing = storage.get_pack_artifacts(&pack.id).await?;
+    let existing_paths: std::collections::HashSet<String> = existing
+        .iter()
+        .filter_map(|a| match &a.artifact.artifact_type {
+            ctx_core::ArtifactType::File { path } => Some(path.clone()),
+            ctx_core::ArtifactType::FileRange { path, .. } => Some(path.clone()),
+            _ => None,
+        })
+        .collect();
+
+    println!("\n  Adding related files:");
+    let mut added = 0;
+
+    for suggestion in response.suggestions {
+        // Skip if already in pack
+        if existing_paths.contains(&suggestion.path) {
+            continue;
+        }
+
+        // Check denylist
+        if denylist.is_denied(&suggestion.path) {
+            continue;
+        }
+
+        // Add the file
+        let source = format!("file:{}", suggestion.path);
+        let options = SourceOptions {
+            priority,
+            ..Default::default()
+        };
+
+        match registry.parse(&source, options).await {
+            Ok(artifact) => match registry.load(&artifact).await {
+                Ok(content) => {
+                    storage
+                        .add_artifact_to_pack_with_content(&pack.id, &artifact, &content, priority)
+                        .await?;
+
+                    // Make path relative for display
+                    let display_path = suggestion
+                        .path
+                        .strip_prefix(workspace.to_string_lossy().as_ref())
+                        .map(|p| p.trim_start_matches('/'))
+                        .unwrap_or(&suggestion.path);
+
+                    println!("    + {} ({:.0}%)", display_path, suggestion.score * 100.0);
+                    added += 1;
+                }
+                Err(_) => continue,
+            },
+            Err(_) => continue,
+        }
+    }
+
+    if added > 0 {
+        println!("  ✓ Added {} related file(s)", added);
+    }
+
+    Ok(())
+}
+
+/// Find workspace root by looking for .git, Cargo.toml, or package.json
+fn find_workspace_root(file: &Path) -> Result<std::path::PathBuf> {
+    let mut current = if file.is_file() {
+        file.parent().unwrap_or(file).to_owned()
+    } else {
+        file.to_path_buf()
+    };
+
+    loop {
+        if current.join(".git").exists()
+            || current.join("Cargo.toml").exists()
+            || current.join("package.json").exists()
+        {
+            return Ok(current);
+        }
+
+        if !current.pop() {
+            return Ok(file.parent().unwrap_or(file).to_owned());
+        }
+    }
 }
 
 async fn remove(storage: &Storage, pack_name: String, artifact_id: String) -> Result<()> {
@@ -449,6 +604,147 @@ async fn save(storage: &Storage, packs: Vec<String>, all: bool) -> Result<()> {
     println!("\nSaved {} pack(s) to ctx.toml", saved);
 
     Ok(())
+}
+
+/// Lint a pack - find missing dependencies
+async fn lint(storage: &Storage, denylist: &Denylist, pack_name: String, fix: bool) -> Result<()> {
+    let pack = storage.get_pack(&pack_name).await?;
+    let artifacts = storage.get_pack_artifacts(&pack.id).await?;
+
+    println!("Linting pack: {} ({})", pack.name, pack.id);
+
+    // Collect all file paths in the pack
+    let pack_files: std::collections::HashSet<String> = artifacts
+        .iter()
+        .filter_map(|a| match &a.artifact.artifact_type {
+            ctx_core::ArtifactType::File { path } => Some(path.clone()),
+            ctx_core::ArtifactType::FileRange { path, .. } => Some(path.clone()),
+            _ => None,
+        })
+        .collect();
+
+    if pack_files.is_empty() {
+        println!("  No files in pack to analyze.");
+        return Ok(());
+    }
+
+    // Find workspace root from first file
+    let first_file = pack_files.iter().next().unwrap();
+    let workspace = find_workspace_root(std::path::Path::new(first_file))?;
+
+    // Analyze imports for all files in pack
+    let mut missing_deps: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+
+    for file_path in &pack_files {
+        let path = std::path::Path::new(file_path);
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+
+        if !ctx_suggest::parsers::is_supported_extension(ext) {
+            continue;
+        }
+
+        // Parse imports
+        let imports = match ctx_suggest::parsers::parse_imports(path).await {
+            Ok(imports) => imports,
+            Err(_) => continue,
+        };
+
+        // Resolve imports to file paths
+        for import in imports {
+            if let Some(resolved) = resolve_import(&workspace, path, ext, &import) {
+                let resolved_str = resolved.to_string_lossy().to_string();
+
+                // Check if resolved file exists but is not in pack
+                if resolved.exists() && !pack_files.contains(&resolved_str) {
+                    missing_deps
+                        .entry(resolved_str)
+                        .or_default()
+                        .push(file_path.clone());
+                }
+            }
+        }
+    }
+
+    if missing_deps.is_empty() {
+        println!("  ✓ No missing dependencies found.");
+        return Ok(());
+    }
+
+    // Sort by number of importers (most referenced first)
+    let mut sorted_deps: Vec<_> = missing_deps.into_iter().collect();
+    sorted_deps.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
+
+    println!("\n  Missing dependencies ({}):", sorted_deps.len());
+    for (dep, importers) in &sorted_deps {
+        let display_path = dep
+            .strip_prefix(workspace.to_string_lossy().as_ref())
+            .map(|p| p.trim_start_matches('/'))
+            .unwrap_or(dep);
+        println!(
+            "    {} (imported by {} file(s))",
+            display_path,
+            importers.len()
+        );
+    }
+
+    if fix {
+        println!("\n  Fixing...");
+        let registry = SourceHandlerRegistry::new();
+        let mut fixed = 0;
+
+        for (dep_path, _) in sorted_deps {
+            // Check denylist
+            if denylist.is_denied(&dep_path) {
+                continue;
+            }
+
+            let source = format!("file:{}", dep_path);
+            let options = SourceOptions::default();
+
+            match registry.parse(&source, options).await {
+                Ok(artifact) => match registry.load(&artifact).await {
+                    Ok(content) => {
+                        storage
+                            .add_artifact_to_pack_with_content(&pack.id, &artifact, &content, 0)
+                            .await?;
+
+                        let display_path = dep_path
+                            .strip_prefix(workspace.to_string_lossy().as_ref())
+                            .map(|p| p.trim_start_matches('/'))
+                            .unwrap_or(&dep_path);
+                        println!("    + {}", display_path);
+                        fixed += 1;
+                    }
+                    Err(_) => continue,
+                },
+                Err(_) => continue,
+            }
+        }
+
+        println!("  ✓ Added {} missing file(s)", fixed);
+    } else {
+        println!("\n  Run with --fix to add missing files.");
+    }
+
+    Ok(())
+}
+
+/// Resolve an import to a file path (delegates to ctx_suggest parsers)
+fn resolve_import(
+    workspace: &Path,
+    source_file: &Path,
+    ext: &str,
+    import: &str,
+) -> Option<std::path::PathBuf> {
+    match ext {
+        "rs" => ctx_suggest::parsers::rust::resolve_import(workspace, source_file, import),
+        "ts" | "tsx" | "js" | "jsx" | "mts" | "mjs" => {
+            ctx_suggest::parsers::typescript::resolve_import(workspace, source_file, import)
+        }
+        "py" => ctx_suggest::parsers::python::resolve_import(workspace, source_file, import),
+        _ => None,
+    }
 }
 
 /// Export a pack from DB to a PackDefinition
