@@ -86,8 +86,14 @@ ctx pack delete <name>                 # Delete pack
 
 # Artifacts
 ctx pack add <pack> <source>           # Add artifact
+ctx pack add <pack> <source> -r        # Add with related files
 ctx pack add <pack> 'glob:src/**/*.rs' # Quote globs!
 ctx pack remove <pack> <artifact-id>   # Remove artifact
+
+# Smart context
+ctx suggest <file>                     # Find related files
+ctx pack lint <pack>                   # Check for missing deps
+ctx pack lint <pack> --fix             # Auto-add missing deps
 
 # Preview & Export
 ctx pack preview <pack>                # Show stats
@@ -133,6 +139,43 @@ artifacts = [
 ```
 
 Packs are auto-namespaced by project directory (e.g., `my-project:style-guide`).
+
+## Smart Context Selection
+
+ctx can automatically suggest related files based on:
+- **Git co-change**: Files frequently modified together in commits
+- **Import graph**: Files that import each other (Rust, TypeScript, Python)
+
+### Find Related Files
+```bash
+ctx suggest src/auth.rs
+# Output:
+# 1. src/auth/middleware.rs (85%)
+# 2. src/auth/tokens.rs (72%)
+# 3. tests/auth_test.rs (65%)
+```
+
+### Add Files with Related
+```bash
+# Add a file and automatically include related files
+ctx pack add my-pack file:src/auth.rs --with-related
+
+# Control how many related files to add (default: 5)
+ctx pack add my-pack file:src/auth.rs -r --related-max 10
+```
+
+### Check Pack Completeness
+```bash
+# Find files imported by pack contents but not included
+ctx pack lint my-pack
+# Output:
+#   Missing dependencies (3):
+#     src/utils/hash.rs (imported by 2 file(s))
+#     src/config.rs (imported by 1 file(s))
+
+# Auto-fix by adding missing files
+ctx pack lint my-pack --fix
+```
 
 ## Common Pack Patterns
 

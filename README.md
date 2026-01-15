@@ -20,6 +20,12 @@ ctx pack add my-feature file:src/auth.rs
 ctx pack add my-feature 'glob:tests/**/*.rs'
 ctx pack add my-feature 'git:diff --base=main'
 
+# Or add with related files automatically
+ctx pack add my-feature file:src/auth.rs --with-related
+
+# Check for missing dependencies
+ctx pack lint my-feature --fix
+
 # Preview
 ctx pack preview my-feature --tokens
 
