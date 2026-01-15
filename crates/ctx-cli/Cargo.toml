@@ -17,6 +17,7 @@ ctx-sources = { workspace = true }
 ctx-mcp = { workspace = true }
 ctx-config = { workspace = true }
 ctx-tui = { workspace = true }
+ctx-suggest = { workspace = true }
 
 clap = { workspace = true }
 serde_json = { workspace = true }

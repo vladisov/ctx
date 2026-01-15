@@ -6,6 +6,7 @@ import { StatusBarManager, registerStatusBarCommands } from "./statusBar/StatusB
 import { registerPackCommands } from "./commands/packCommands";
 import { registerArtifactCommands } from "./commands/artifactCommands";
 import { registerSyncCommands } from "./commands/syncCommands";
+import { registerSuggestCommands } from "./commands/suggestCommands";
 
 let serverManager: ServerLifecycleManager;
 let statusBarManager: StatusBarManager;
@@ -39,6 +40,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   registerPackCommands(context, packsTreeProvider);
   registerArtifactCommands(context, packsTreeProvider);
   registerSyncCommands(context, packsTreeProvider);
+  registerSuggestCommands(context, packsTreeProvider);
   registerStatusBarCommands(context, serverManager);
 
   // Register server commands

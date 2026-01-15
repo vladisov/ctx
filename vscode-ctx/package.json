@@ -138,6 +138,12 @@
         "category": "ctx"
       },
       {
+        "command": "ctx.showSuggestions",
+        "title": "Show Related Files",
+        "icon": "$(lightbulb)",
+        "category": "ctx"
+      },
+      {
         "command": "ctx.showStatusMenu",
         "title": "Show ctx Status",
         "category": "ctx"
@@ -192,6 +198,11 @@
       ],
       "editor/context": [
         {
+          "command": "ctx.showSuggestions",
+          "when": "editorTextFocus",
+          "group": "ctx@0"
+        },
+        {
           "command": "ctx.addSelectionToPack",
           "when": "editorHasSelection",
           "group": "ctx@1"
@@ -209,6 +220,12 @@
         "key": "ctrl+shift+c a",
         "mac": "cmd+shift+c a",
         "when": "editorHasSelection"
+      },
+      {
+        "command": "ctx.showSuggestions",
+        "key": "ctrl+shift+c s",
+        "mac": "cmd+shift+c s",
+        "when": "editorTextFocus"
       }
     ]
   },

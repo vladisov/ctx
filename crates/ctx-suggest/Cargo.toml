@@ -1,0 +1,37 @@
+[package]
+name = "ctx-suggest"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Smart context suggestion for ctx"
+
+[dependencies]
+# Internal
+ctx-core = { workspace = true }
+
+# Async
+tokio = { workspace = true }
+async-trait = { workspace = true }
+
+# Regex for import parsing
+regex = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# File system
+walkdir = { workspace = true }
+ignore = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Concurrent cache
+dashmap = "6.1"

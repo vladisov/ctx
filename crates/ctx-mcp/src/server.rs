@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{delete, get, post},
@@ -9,7 +9,9 @@ use serde::Deserialize;
 use std::sync::Arc;
 
 use ctx_core::{Artifact, ArtifactType, Pack, RenderPolicy};
+use ctx_suggest::{SuggestConfig, SuggestRequest, SuggestionEngine};
 use tokio::net::TcpListener;
+use tokio::sync::RwLock;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::info;
 
@@ -45,6 +47,7 @@ pub struct McpServer {
 #[derive(Clone)]
 struct AppState {
     server: Arc<McpServer>,
+    suggestion_engine: Arc<RwLock<Option<SuggestionEngine>>>,
 }
 
 impl McpServer {
@@ -62,7 +65,10 @@ impl McpServer {
             read_only,
         });
 
-        let app_state = AppState { server };
+        let app_state = AppState {
+            server,
+            suggestion_engine: Arc::new(RwLock::new(None)),
+        };
 
         // Add CORS layer to allow connections from any origin
         let cors = CorsLayer::new()
@@ -93,6 +99,8 @@ impl McpServer {
                 "/api/packs/:name/artifacts/:artifact_id",
                 delete(api_remove_artifact),
             )
+            // Suggestion endpoint
+            .route("/api/suggest", get(api_suggest))
             .layer(cors)
             .with_state(app_state);
 
@@ -347,6 +355,75 @@ async fn api_remove_artifact(
                 StatusCode::INTERNAL_SERVER_ERROR
             };
             (status, e.to_string()).into_response()
+        }
+    }
+}
+
+/// Query parameters for suggestion endpoint
+#[derive(Deserialize)]
+struct SuggestParams {
+    file: String,
+    #[serde(default)]
+    pack: Option<String>,
+    #[serde(default)]
+    max_results: Option<usize>,
+}
+
+/// GET /api/suggest - Get file suggestions
+async fn api_suggest(
+    State(state): State<AppState>,
+    Query(params): Query<SuggestParams>,
+) -> Response {
+    // Canonicalize the file path
+    let file_path = match std::path::Path::new(&params.file).canonicalize() {
+        Ok(p) => p,
+        Err(e) => {
+            return (StatusCode::BAD_REQUEST, format!("Invalid file path: {}", e)).into_response()
+        }
+    };
+
+    // Find workspace root
+    let workspace = find_workspace_root(&file_path);
+
+    // Ensure suggestion engine exists
+    {
+        let mut engine_guard = state.suggestion_engine.write().await;
+        if engine_guard.is_none() {
+            *engine_guard = Some(SuggestionEngine::new(&workspace, SuggestConfig::default()));
+        }
+    }
+
+    // Build request
+    let request = SuggestRequest {
+        file: file_path.to_string_lossy().to_string(),
+        pack_name: params.pack,
+        max_results: params.max_results,
+    };
+
+    // Get suggestions using read lock
+    let engine_guard = state.suggestion_engine.read().await;
+    let engine = engine_guard.as_ref().unwrap();
+
+    match engine.suggest(&request).await {
+        Ok(response) => Json(response).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
+}
+
+/// Find workspace root by looking for .git or Cargo.toml
+fn find_workspace_root(file: &std::path::Path) -> std::path::PathBuf {
+    let mut current = if file.is_file() {
+        file.parent().unwrap_or(file).to_owned()
+    } else {
+        file.to_owned()
+    };
+
+    loop {
+        if current.join(".git").exists() || current.join("Cargo.toml").exists() {
+            return current;
+        }
+        if !current.pop() {
+            return file.parent().unwrap_or(file).to_owned();
         }
     }
 }

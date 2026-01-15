@@ -87,3 +87,28 @@ export interface ApiError {
   error: string;
   status: number;
 }
+
+// Suggestion types
+export interface SuggestRequest {
+  file: string;
+  pack?: string;
+  max_results?: number;
+}
+
+export interface SuggestResponse {
+  file: string;
+  suggestions: Suggestion[];
+  elapsed_ms: number;
+}
+
+export interface Suggestion {
+  path: string;
+  score: number;
+  reasons: SuggestionReason[];
+}
+
+export interface SuggestionReason {
+  signal: string;
+  description: string;
+  contribution: number;
+}

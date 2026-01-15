@@ -9,6 +9,8 @@ import {
   AddArtifactResponse,
   DeleteResponse,
   ApiError,
+  SuggestRequest,
+  SuggestResponse,
 } from "./types";
 import { getConfig } from "../config";
 
@@ -69,6 +71,19 @@ export class CtxApiClient {
     return this.delete(
       `/api/packs/${encodeURIComponent(packName)}/artifacts/${encodeURIComponent(artifactId)}`
     );
+  }
+
+  // Suggestion Operations
+
+  async getSuggestions(request: SuggestRequest): Promise<SuggestResponse> {
+    const params = new URLSearchParams({ file: request.file });
+    if (request.pack) {
+      params.set("pack", request.pack);
+    }
+    if (request.max_results) {
+      params.set("max_results", String(request.max_results));
+    }
+    return this.get<SuggestResponse>(`/api/suggest?${params}`);
   }
 
   // Health Check

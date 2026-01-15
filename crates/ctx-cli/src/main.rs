@@ -51,5 +51,8 @@ async fn main() -> Result<()> {
                 commands::ui::handle(&storage).await
             }
         }
+        cli::Commands::Suggest { file, max, format } => {
+            commands::suggest::handle_suggest(file, max, &format).await
+        }
     }
 }

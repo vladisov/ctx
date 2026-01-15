@@ -10,6 +10,7 @@ ctx-storage = { workspace = true }
 ctx-engine = { workspace = true }
 ctx-security = { workspace = true }
 ctx-sources = { workspace = true }
+ctx-suggest = { workspace = true }
 
 # Hashing
 blake3 = { workspace = true }

@@ -26,6 +26,20 @@ pub enum Commands {
     #[command(subcommand)]
     Pack(PackCommands),
 
+    /// Suggest related files for context
+    Suggest {
+        /// File to find suggestions for
+        file: std::path::PathBuf,
+
+        /// Maximum number of suggestions
+        #[arg(long, short = 'n', default_value = "10")]
+        max: usize,
+
+        /// Output format (text, json)
+        #[arg(long, default_value = "text")]
+        format: String,
+    },
+
     /// Start MCP server
     Mcp {
         /// Use stdio transport (for Claude Code integration)
