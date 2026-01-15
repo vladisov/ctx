@@ -32,3 +32,4 @@ portable-pty = { workspace = true }
 futures-util = { workspace = true }
 serde = { workspace = true }
 reqwest = { workspace = true }
+arboard = { workspace = true }

@@ -41,32 +41,32 @@ echo "Using: $CTX"
 echo ""
 
 # Test 1: Create pack with defaults
-$CTX pack create test-pack >/dev/null
-test_cmd "Pack with default budget" "pack show test-pack" "Token budget: 128000"
+$CTX create test-pack >/dev/null
+test_cmd "Pack with default budget" "show test-pack" "Token budget: 128000"
 
 # Test 2: Create pack with custom budget
-$CTX pack create custom-pack --tokens 5000 >/dev/null
-test_cmd "Pack with custom budget" "pack show custom-pack" "Token budget: 5000"
+$CTX create custom-pack --tokens 5000 >/dev/null
+test_cmd "Pack with custom budget" "show custom-pack" "Token budget: 5000"
 
 # Test 3: Add file artifact
-$CTX pack add test-pack file:Cargo.toml >/dev/null
-test_cmd "Add file artifact" "pack show test-pack" "Cargo.toml"
+$CTX add test-pack file:Cargo.toml >/dev/null
+test_cmd "Add file artifact" "show test-pack" "Cargo.toml"
 
 # Test 4: Add text artifact
-$CTX pack add test-pack 'text:Test instruction' >/dev/null
-test_cmd "Add text artifact" "pack show test-pack" "text:Test instruction"
+$CTX add test-pack 'text:Test instruction' >/dev/null
+test_cmd "Add text artifact" "show test-pack" "text:Test instruction"
 
 # Test 5: Denylist validation
 echo "secret=123" > "$TEST_DIR/.env"
-test_cmd "Denylist blocks .env" "pack add test-pack file:$TEST_DIR/.env" "denied"
+test_cmd "Denylist blocks .env" "add test-pack file:$TEST_DIR/.env" "denied"
 
 # Test 6: Preview pack
-test_cmd "Preview pack" "pack preview test-pack --tokens" "render_hash:"
+test_cmd "Preview pack" "preview test-pack --tokens" "render_hash:"
 
 # Test 7: Deterministic rendering
 echo "Deterministic rendering"
-HASH1=$($CTX pack preview test-pack 2>&1 | grep "render_hash:" | awk '{print $2}')
-HASH2=$($CTX pack preview test-pack 2>&1 | grep "render_hash:" | awk '{print $2}')
+HASH1=$($CTX preview test-pack 2>&1 | grep "render_hash:" | awk '{print $2}')
+HASH2=$($CTX preview test-pack 2>&1 | grep "render_hash:" | awk '{print $2}')
 if [ "$HASH1" = "$HASH2" ] && [ -n "$HASH1" ]; then
     echo "✓ Deterministic rendering"
 else
@@ -77,8 +77,8 @@ fi
 # Test 8: Git diff (if in git repo)
 echo "Git diff handler"
 if git rev-parse --git-dir >/dev/null 2>&1; then
-    if $CTX pack create git-test >/dev/null 2>&1 && \
-       $CTX pack add git-test 'git:diff --base=HEAD' >/dev/null 2>&1; then
+    if $CTX create git-test >/dev/null 2>&1 && \
+       $CTX add git-test 'git:diff --base=HEAD' >/dev/null 2>&1; then
         echo "✓ Git diff handler"
     else
         echo "⊙ Git diff handler (no changes)"
@@ -88,7 +88,7 @@ else
 fi
 
 # Test 9: List packs
-PACK_COUNT=$($CTX pack list 2>&1 | grep -c "Token budget:" || true)
+PACK_COUNT=$($CTX ls 2>&1 | grep -c "Token budget:" || true)
 if [ "$PACK_COUNT" -ge 2 ]; then
     echo "✓ Pack listing ($PACK_COUNT packs)"
 else
@@ -119,8 +119,8 @@ else
     exit 1
 fi
 
-# Test 12: ctx pack sync
-echo "ctx pack sync"
+# Test 12: ctx sync
+echo "ctx sync"
 cat > "$PROJECT_DIR/ctx.toml" << 'TOML'
 [config]
 default_budget = 50000
@@ -136,16 +136,16 @@ artifacts = [
     { source = "file:main.rs", priority = 0 },
 ]
 TOML
-if $CTX pack sync 2>&1 | grep -q "Synced 2 pack"; then
-    echo "✓ ctx pack sync"
+if $CTX sync 2>&1 | grep -q "Synced 2 pack"; then
+    echo "✓ ctx sync"
 else
-    echo "✗ ctx pack sync"
+    echo "✗ ctx sync"
     exit 1
 fi
 
 # Test 13: Namespaced packs exist
 echo "Namespaced packs"
-if $CTX pack list 2>&1 | grep -q "test-project:project-docs"; then
+if $CTX ls 2>&1 | grep -q "test-project:project-docs"; then
     echo "✓ Namespaced packs"
 else
     echo "✗ Namespaced packs"
@@ -154,24 +154,24 @@ fi
 
 # Test 14: Preview namespaced pack
 echo "Preview namespaced pack"
-if $CTX pack preview "test-project:project-docs" 2>&1 | grep -q "/ 25000"; then
+if $CTX preview "test-project:project-docs" 2>&1 | grep -q "/ 25000"; then
     echo "✓ Preview namespaced pack"
 else
     # Try showing the output for debugging
-    $CTX pack preview "test-project:project-docs" 2>&1 || true
+    $CTX preview "test-project:project-docs" 2>&1 || true
     echo "✗ Preview namespaced pack"
     exit 1
 fi
 
-# Test 15: ctx pack save
-echo "ctx pack save"
+# Test 15: ctx save
+echo "ctx save"
 # Create a new pack and save it
-$CTX pack create test-project:new-pack --tokens 10000 >/dev/null 2>&1
-$CTX pack add "test-project:new-pack" "file:README.md" >/dev/null 2>&1
-if $CTX pack save "test-project:new-pack" 2>&1 | grep -q "Saved 1 pack"; then
-    echo "✓ ctx pack save"
+$CTX create test-project:new-pack --tokens 10000 >/dev/null 2>&1
+$CTX add "test-project:new-pack" "file:README.md" >/dev/null 2>&1
+if $CTX save "test-project:new-pack" 2>&1 | grep -q "Saved 1 pack"; then
+    echo "✓ ctx save"
 else
-    echo "✗ ctx pack save"
+    echo "✗ ctx save"
     exit 1
 fi
 
@@ -185,6 +185,16 @@ else
 fi
 
 # Return to original directory
+cd - >/dev/null
+
+# Test 17: Quick command (ctx @)
+echo "Quick command (ctx @)"
+cd /Users/vladisov/dev/ctx
+if $CTX @ src/main.rs --output 2>&1 | head -5 | grep -q "==="; then
+    echo "✓ Quick command"
+else
+    echo "⊙ Quick command (no suggestions)"
+fi
 cd - >/dev/null
 
 echo ""

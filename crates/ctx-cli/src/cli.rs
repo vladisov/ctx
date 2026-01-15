@@ -15,85 +15,34 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Initialize ctx.toml in current directory
-    Init {
-        /// Import existing packs into ctx.toml
-        #[arg(long)]
-        import: Vec<String>,
-    },
-
-    /// Manage context packs
-    #[command(subcommand)]
-    Pack(PackCommands),
-
-    /// Suggest related files for context
-    Suggest {
-        /// File to find suggestions for
+    // ===== Quick workflow =====
+    /// Quick context: file + related files to clipboard
+    #[command(name = "@")]
+    Quick {
+        /// File to build context from
         file: std::path::PathBuf,
 
-        /// Maximum number of suggestions
-        #[arg(long, short = 'n', default_value = "10")]
-        max: usize,
+        /// Output to stdout instead of clipboard
+        #[arg(long, short)]
+        output: bool,
 
-        /// Output format (text, json)
-        #[arg(long, default_value = "text")]
-        format: String,
+        /// Max related files to include (default: 5)
+        #[arg(long, short = 'n', default_value = "5")]
+        max_related: usize,
     },
 
-    /// Start MCP server
-    Mcp {
-        /// Use stdio transport (for Claude Code integration)
-        #[arg(long)]
-        stdio: bool,
-
-        #[arg(long)]
-        port: Option<u16>,
-
-        #[arg(long)]
-        host: Option<String>,
-
-        #[arg(long)]
-        read_only: bool,
-
-        /// Start ngrok tunnel for public access
-        #[arg(long)]
-        tunnel: bool,
-    },
-
-    /// Launch interactive UI
-    Ui {
-        /// Launch web UI instead of terminal UI
-        #[arg(long)]
-        web: bool,
-
-        /// Port for web UI (default: 17380)
-        #[arg(long, default_value = "17380")]
-        port: u16,
-    },
-}
-
-#[derive(Subcommand)]
-pub enum PackCommands {
+    // ===== Pack management =====
     /// Create a new pack
     Create {
         /// Name of the pack
         name: String,
 
-        /// Token budget (default from config: 128000)
+        /// Token budget (default: 128000)
         #[arg(long)]
         tokens: Option<usize>,
     },
 
-    /// List all packs
-    List,
-
-    /// Show pack details
-    Show {
-        /// Pack name or ID
-        pack: String,
-    },
-
-    /// Add an artifact to a pack
+    /// Add source to a pack
     Add {
         /// Pack name or ID
         pack: String,
@@ -134,8 +83,8 @@ pub enum PackCommands {
         related_max: usize,
     },
 
-    /// Remove an artifact from a pack
-    Remove {
+    /// Remove artifact from a pack
+    Rm {
         /// Pack name or ID
         pack: String,
 
@@ -143,12 +92,21 @@ pub enum PackCommands {
         artifact_id: String,
     },
 
+    /// List all packs
+    Ls,
+
+    /// Show pack details
+    Show {
+        /// Pack name or ID
+        pack: String,
+    },
+
     /// Preview pack rendering
     Preview {
         /// Pack name or ID
         pack: String,
 
-        /// Show token counts
+        /// Show token counts per artifact
         #[arg(long)]
         tokens: bool,
 
@@ -156,9 +114,15 @@ pub enum PackCommands {
         #[arg(long)]
         redactions: bool,
 
-        /// Show the rendered payload
-        #[arg(long)]
-        show_payload: bool,
+        /// Show the full rendered payload
+        #[arg(long, short)]
+        payload: bool,
+    },
+
+    /// Copy pack to clipboard
+    Cp {
+        /// Pack name or ID
+        pack: String,
     },
 
     /// Delete a pack
@@ -171,7 +135,40 @@ pub enum PackCommands {
         force: bool,
     },
 
-    /// Sync packs from ctx.toml to database
+    /// Check pack completeness (find missing dependencies)
+    Lint {
+        /// Pack name or ID
+        pack: String,
+
+        /// Auto-fix by adding missing files
+        #[arg(long)]
+        fix: bool,
+    },
+
+    // ===== Discovery =====
+    /// Suggest related files
+    Suggest {
+        /// File to find suggestions for
+        file: std::path::PathBuf,
+
+        /// Maximum number of suggestions
+        #[arg(long, short = 'n', default_value = "10")]
+        max: usize,
+
+        /// Output format (text, json)
+        #[arg(long, default_value = "text")]
+        format: String,
+    },
+
+    // ===== Project config =====
+    /// Initialize ctx.toml in current directory
+    Init {
+        /// Import existing packs into ctx.toml
+        #[arg(long)]
+        import: Vec<String>,
+    },
+
+    /// Sync packs from ctx.toml
     Sync,
 
     /// Save pack(s) to ctx.toml
@@ -185,13 +182,35 @@ pub enum PackCommands {
         all: bool,
     },
 
-    /// Check pack completeness (find missing dependencies)
-    Lint {
-        /// Pack name or ID
-        pack: String,
-
-        /// Auto-fix by adding missing files
+    // ===== Services =====
+    /// Start MCP server
+    Mcp {
+        /// Use stdio transport (for Claude Code integration)
         #[arg(long)]
-        fix: bool,
+        stdio: bool,
+
+        #[arg(long)]
+        port: Option<u16>,
+
+        #[arg(long)]
+        host: Option<String>,
+
+        #[arg(long)]
+        read_only: bool,
+
+        /// Start ngrok tunnel for public access
+        #[arg(long)]
+        tunnel: bool,
+    },
+
+    /// Launch interactive UI
+    Ui {
+        /// Launch web UI instead of terminal UI
+        #[arg(long)]
+        web: bool,
+
+        /// Port for web UI (default: 17380)
+        #[arg(long, default_value = "17380")]
+        port: u16,
     },
 }

@@ -7,60 +7,7 @@ use ctx_storage::Storage;
 use ctx_suggest::{SuggestConfig, SuggestRequest, SuggestionEngine};
 use std::path::Path;
 
-use crate::cli::PackCommands;
-
-pub async fn handle(cmd: PackCommands, storage: &Storage, config: &Config) -> Result<()> {
-    let denylist = Denylist::new(config.denylist.patterns.clone());
-    match cmd {
-        PackCommands::Create { name, tokens } => {
-            let budget = tokens.unwrap_or(config.budget_tokens);
-            create(storage, name, budget).await
-        }
-        PackCommands::List => list(storage).await,
-        PackCommands::Show { pack } => show(storage, pack).await,
-        PackCommands::Add {
-            pack,
-            source,
-            priority,
-            start,
-            end,
-            max_files,
-            exclude,
-            recursive,
-            with_related,
-            related_max,
-        } => {
-            add(
-                storage,
-                &denylist,
-                pack,
-                source,
-                priority,
-                start,
-                end,
-                max_files,
-                exclude,
-                recursive,
-                with_related,
-                related_max,
-            )
-            .await
-        }
-        PackCommands::Remove { pack, artifact_id } => remove(storage, pack, artifact_id).await,
-        PackCommands::Preview {
-            pack,
-            tokens,
-            redactions,
-            show_payload,
-        } => preview(storage, pack, tokens, redactions, show_payload).await,
-        PackCommands::Delete { pack, force } => delete(storage, pack, force).await,
-        PackCommands::Sync => sync(storage, config, &denylist).await,
-        PackCommands::Save { packs, all } => save(storage, packs, all).await,
-        PackCommands::Lint { pack, fix } => lint(storage, &denylist, pack, fix).await,
-    }
-}
-
-async fn create(storage: &Storage, name: String, tokens: usize) -> Result<()> {
+pub async fn create(storage: &Storage, name: String, tokens: usize) -> Result<()> {
     let policies = RenderPolicy {
         budget_tokens: tokens,
         ordering: OrderingStrategy::PriorityThenTime,
@@ -76,7 +23,7 @@ async fn create(storage: &Storage, name: String, tokens: usize) -> Result<()> {
     Ok(())
 }
 
-async fn list(storage: &Storage) -> Result<()> {
+pub async fn list(storage: &Storage) -> Result<()> {
     let packs = storage.list_packs().await?;
 
     if packs.is_empty() {
@@ -93,7 +40,7 @@ async fn list(storage: &Storage) -> Result<()> {
     Ok(())
 }
 
-async fn show(storage: &Storage, pack_name: String) -> Result<()> {
+pub async fn show(storage: &Storage, pack_name: String) -> Result<()> {
     // Get pack by name or ID
     let pack = storage.get_pack(&pack_name).await?;
 
@@ -123,7 +70,7 @@ async fn show(storage: &Storage, pack_name: String) -> Result<()> {
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn add(
+pub async fn add(
     storage: &Storage,
     denylist: &Denylist,
     pack_name: String,
@@ -308,7 +255,7 @@ async fn add_related_files(
     Ok(())
 }
 
-async fn remove(storage: &Storage, pack_name: String, artifact_id: String) -> Result<()> {
+pub async fn remove(storage: &Storage, pack_name: String, artifact_id: String) -> Result<()> {
     let pack = storage.get_pack(&pack_name).await?;
     storage
         .remove_artifact_from_pack(&pack.id, &artifact_id)
@@ -322,7 +269,7 @@ async fn remove(storage: &Storage, pack_name: String, artifact_id: String) -> Re
     Ok(())
 }
 
-async fn preview(
+pub async fn preview(
     storage: &Storage,
     pack_name: String,
     show_tokens: bool,
@@ -387,7 +334,7 @@ async fn preview(
     Ok(())
 }
 
-async fn delete(storage: &Storage, pack_name: String, force: bool) -> Result<()> {
+pub async fn delete(storage: &Storage, pack_name: String, force: bool) -> Result<()> {
     let pack = storage.get_pack(&pack_name).await?;
 
     if !force {
@@ -409,7 +356,7 @@ async fn delete(storage: &Storage, pack_name: String, force: bool) -> Result<()>
     Ok(())
 }
 
-async fn sync(storage: &Storage, _config: &Config, denylist: &Denylist) -> Result<()> {
+pub async fn sync(storage: &Storage, _config: &Config, denylist: &Denylist) -> Result<()> {
     let (project_root, project_config) = ProjectConfig::find_and_load()?
         .ok_or_else(|| anyhow::anyhow!("No ctx.toml found in current or parent directories"))?;
 
@@ -529,7 +476,7 @@ async fn sync(storage: &Storage, _config: &Config, denylist: &Denylist) -> Resul
     Ok(())
 }
 
-async fn save(storage: &Storage, packs: Vec<String>, all: bool) -> Result<()> {
+pub async fn save(storage: &Storage, packs: Vec<String>, all: bool) -> Result<()> {
     let current_dir = std::env::current_dir()?;
 
     // Load existing ctx.toml or create new
@@ -573,8 +520,12 @@ async fn save(storage: &Storage, packs: Vec<String>, all: bool) -> Result<()> {
     Ok(())
 }
 
-/// Lint a pack - find missing dependencies
-async fn lint(storage: &Storage, denylist: &Denylist, pack_name: String, fix: bool) -> Result<()> {
+pub async fn lint(
+    storage: &Storage,
+    denylist: &Denylist,
+    pack_name: String,
+    fix: bool,
+) -> Result<()> {
     let pack = storage.get_pack(&pack_name).await?;
     let artifacts = storage.get_pack_artifacts(&pack.id).await?;
 
@@ -583,14 +534,15 @@ async fn lint(storage: &Storage, denylist: &Denylist, pack_name: String, fix: bo
     let pack_files: std::collections::HashSet<String> = artifacts
         .iter()
         .filter_map(|a| match &a.artifact.artifact_type {
-            ctx_core::ArtifactType::File { path } => Some(path.clone()),
-            ctx_core::ArtifactType::FileRange { path, .. } => Some(path.clone()),
+            ctx_core::ArtifactType::File { path }
+            | ctx_core::ArtifactType::FileRange { path, .. }
+            | ctx_core::ArtifactType::Markdown { path } => Some(path.clone()),
             _ => None,
         })
         .collect();
 
     if pack_files.is_empty() {
-        println!("  No files in pack to analyze.");
+        println!("  No file artifacts to analyze (lint checks file: sources, not glob: or text:).");
         return Ok(());
     }
 
@@ -769,4 +721,128 @@ fn resolve_source(source_uri: &str, project_root: &Path) -> String {
     } else {
         source_uri.to_string()
     }
+}
+
+pub async fn copy_to_clipboard(storage: &Storage, pack_name: String) -> Result<()> {
+    let renderer = Renderer::new(storage.clone());
+    let pack = storage.get_pack(&pack_name).await?;
+
+    let result = renderer.render_pack(&pack.id, None).await?;
+    let payload = result
+        .payload
+        .ok_or_else(|| anyhow::anyhow!("No payload generated"))?;
+
+    let mut clipboard = arboard::Clipboard::new()?;
+    clipboard.set_text(&payload)?;
+
+    println!("✓ Copied pack '{}' to clipboard", pack.name);
+    println!("  {} tokens", result.token_estimate);
+
+    Ok(())
+}
+
+pub async fn quick(
+    _storage: &Storage,
+    denylist: &Denylist,
+    file: std::path::PathBuf,
+    output: bool,
+    max_related: usize,
+) -> Result<()> {
+    let file_abs = if file.is_absolute() {
+        file.clone()
+    } else {
+        std::env::current_dir()?.join(&file)
+    };
+
+    if !file_abs.exists() {
+        anyhow::bail!("File not found: {}", file_abs.display());
+    }
+
+    let workspace = super::find_workspace_root(&file_abs)?;
+    let file_str = file_abs.to_string_lossy().to_string();
+
+    // Get suggestions
+    let config = SuggestConfig {
+        max_results: max_related,
+        min_score: 0.2,
+        ..Default::default()
+    };
+    let engine = SuggestionEngine::new(&workspace, config);
+    let request = SuggestRequest {
+        file: file_str.clone(),
+        pack_name: None,
+        max_results: Some(max_related),
+    };
+
+    let response = engine.suggest(&request).await?;
+
+    // Build output
+    let registry = SourceHandlerRegistry::new();
+    let mut content = String::new();
+
+    // Add main file
+    let main_source = format!("file:{}", file_str);
+    let main_artifact = registry
+        .parse(&main_source, SourceOptions::default())
+        .await?;
+    let main_content = registry.load(&main_artifact).await?;
+
+    let display_path = file_abs
+        .strip_prefix(&workspace)
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|_| file.to_string_lossy().to_string());
+
+    content.push_str(&format!("=== {} ===\n", display_path));
+    content.push_str(&main_content);
+    content.push_str("\n\n");
+
+    // Add related files
+    for suggestion in &response.suggestions {
+        if denylist.is_denied(&suggestion.path) {
+            continue;
+        }
+
+        let source = format!("file:{}", suggestion.path);
+        let Ok(artifact) = registry.parse(&source, SourceOptions::default()).await else {
+            continue;
+        };
+        let Ok(file_content) = registry.load(&artifact).await else {
+            continue;
+        };
+
+        let rel_path = std::path::Path::new(&suggestion.path)
+            .strip_prefix(&workspace)
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| suggestion.path.clone());
+
+        content.push_str(&format!(
+            "=== {} ({:.0}%) ===\n",
+            rel_path,
+            suggestion.score * 100.0
+        ));
+        content.push_str(&file_content);
+        content.push_str("\n\n");
+    }
+
+    if output {
+        println!("{}", content);
+    } else {
+        let mut clipboard = arboard::Clipboard::new()?;
+        clipboard.set_text(&content)?;
+
+        println!("✓ Copied to clipboard:");
+        println!("  - {} (main)", display_path);
+        for suggestion in &response.suggestions {
+            if denylist.is_denied(&suggestion.path) {
+                continue;
+            }
+            let rel_path = std::path::Path::new(&suggestion.path)
+                .strip_prefix(&workspace)
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|_| suggestion.path.clone());
+            println!("  - {} ({:.0}%)", rel_path, suggestion.score * 100.0);
+        }
+    }
+
+    Ok(())
 }

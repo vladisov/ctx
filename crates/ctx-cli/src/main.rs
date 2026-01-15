@@ -4,11 +4,11 @@ mod commands;
 use anyhow::Result;
 use clap::Parser;
 use ctx_config::Config;
+use ctx_sources::Denylist;
 use ctx_storage::Storage;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize tracing
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -17,17 +17,83 @@ async fn main() -> Result<()> {
         .init();
 
     let cli = cli::Cli::parse();
-
-    // Load config (creates default if not found)
     let config = Config::load()?;
 
-    // Initialize storage (use custom data dir if provided)
     let db_path = cli.data_dir.as_ref().map(|dir| dir.join("state.db"));
     let storage = Storage::new(db_path).await?;
+    let denylist = Denylist::new(config.denylist.patterns.clone());
 
     match cli.command {
+        // Quick workflow
+        cli::Commands::Quick {
+            file,
+            output,
+            max_related,
+        } => commands::pack::quick(&storage, &denylist, file, output, max_related).await,
+
+        // Pack management
+        cli::Commands::Create { name, tokens } => {
+            let budget = tokens.unwrap_or(config.budget_tokens);
+            commands::pack::create(&storage, name, budget).await
+        }
+        cli::Commands::Add {
+            pack,
+            source,
+            priority,
+            start,
+            end,
+            max_files,
+            exclude,
+            recursive,
+            with_related,
+            related_max,
+        } => {
+            commands::pack::add(
+                &storage,
+                &denylist,
+                pack,
+                source,
+                priority,
+                start,
+                end,
+                max_files,
+                exclude,
+                recursive,
+                with_related,
+                related_max,
+            )
+            .await
+        }
+        cli::Commands::Rm { pack, artifact_id } => {
+            commands::pack::remove(&storage, pack, artifact_id).await
+        }
+        cli::Commands::Ls => commands::pack::list(&storage).await,
+        cli::Commands::Show { pack } => commands::pack::show(&storage, pack).await,
+        cli::Commands::Preview {
+            pack,
+            tokens,
+            redactions,
+            payload,
+        } => commands::pack::preview(&storage, pack, tokens, redactions, payload).await,
+        cli::Commands::Cp { pack } => commands::pack::copy_to_clipboard(&storage, pack).await,
+        cli::Commands::Delete { pack, force } => {
+            commands::pack::delete(&storage, pack, force).await
+        }
+        cli::Commands::Lint { pack, fix } => {
+            commands::pack::lint(&storage, &denylist, pack, fix).await
+        }
+
+        // Discovery
+        cli::Commands::Suggest { file, max, format } => {
+            commands::suggest::handle_suggest(file, max, &format).await
+        }
+
+        // Project config
         cli::Commands::Init { import } => commands::init::handle(&storage, import).await,
-        cli::Commands::Pack(pack_cmd) => commands::pack::handle(pack_cmd, &storage, &config).await,
+        cli::Commands::Sync => commands::pack::sync(&storage, &config, &denylist).await,
+        cli::Commands::Save { packs, all } => commands::pack::save(&storage, packs, all).await,
+
+        // Services
         cli::Commands::Mcp {
             stdio,
             port,
@@ -50,9 +116,6 @@ async fn main() -> Result<()> {
             } else {
                 commands::ui::handle(&storage).await
             }
-        }
-        cli::Commands::Suggest { file, max, format } => {
-            commands::suggest::handle_suggest(file, max, &format).await
         }
     }
 }

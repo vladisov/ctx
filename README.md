@@ -14,20 +14,26 @@
 # Install
 cargo install --path crates/ctx-cli
 
-# Create a pack
-ctx pack create my-feature --tokens 50000
-ctx pack add my-feature file:src/auth.rs
-ctx pack add my-feature 'glob:tests/**/*.rs'
-ctx pack add my-feature 'git:diff --base=main'
+# Quick context: file + related files to clipboard
+ctx @ src/auth.rs
 
-# Or add with related files automatically
-ctx pack add my-feature file:src/auth.rs --with-related
+# Or build a pack for repeatable context
+ctx create my-feature --tokens 50000
+ctx add my-feature file:src/auth.rs
+ctx add my-feature 'glob:tests/**/*.rs'
+ctx add my-feature 'git:diff --base=main'
+
+# Add with related files automatically
+ctx add my-feature file:src/auth.rs --with-related
 
 # Check for missing dependencies
-ctx pack lint my-feature --fix
+ctx lint my-feature --fix
 
 # Preview
-ctx pack preview my-feature --tokens
+ctx preview my-feature --tokens
+
+# Copy to clipboard
+ctx cp my-feature
 
 # Or use the interactive TUI
 ctx ui
@@ -47,8 +53,8 @@ Then ask: "List my ctx packs" or "Preview the auth pack"
 Share pack definitions via version control:
 ```bash
 ctx init                  # Create ctx.toml
-ctx pack save my-feature  # Export to ctx.toml
-ctx pack sync             # Import from ctx.toml
+ctx save my-feature       # Export to ctx.toml
+ctx sync                  # Import from ctx.toml
 ```
 
 ## Documentation

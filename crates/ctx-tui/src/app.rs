@@ -74,6 +74,12 @@ impl App {
         self.content_scroll = 0;
     }
 
+    fn clear_preview_state(&mut self) {
+        self.preview_result = None;
+        self.preview_mode = PreviewMode::Stats;
+        self.content_scroll = 0;
+    }
+
     pub fn exit_content_view(&mut self) {
         self.artifact_content = None;
         self.content_scroll = 0;
@@ -112,6 +118,7 @@ impl App {
 
         self.selected_artifact_index = None;
         self.clear_artifact_state();
+        self.clear_preview_state();
         self.selected_pack_index = (self.selected_pack_index + 1) % self.packs.len();
     }
 
@@ -126,11 +133,12 @@ impl App {
             return;
         }
 
+        self.clear_artifact_state();
+        self.clear_preview_state();
         self.selected_pack_index = self
             .selected_pack_index
             .checked_sub(1)
             .unwrap_or(self.packs.len() - 1);
-        self.clear_artifact_state();
     }
 
     pub async fn toggle_expand(&mut self) -> Result<()> {
@@ -167,6 +175,13 @@ impl App {
             return self.load_artifact_content(idx).await;
         }
 
+        // If preview exists, toggle to content view instead of regenerating
+        if self.preview_result.is_some() && self.preview_mode == PreviewMode::Stats {
+            self.preview_mode = PreviewMode::Content;
+            self.content_scroll = 0;
+            return Ok(());
+        }
+
         let Some(pack_id) = self.selected_pack().map(|p| p.id.clone()) else {
             return Ok(());
         };
@@ -179,7 +194,8 @@ impl App {
         match result {
             Ok(r) => {
                 self.preview_result = Some(r);
-                self.status_message = Some("Preview generated".into());
+                self.status_message =
+                    Some("Preview generated. Press 'p' again to view content.".into());
             }
             Err(e) => self.status_message = Some(format!("Preview failed: {e}")),
         }

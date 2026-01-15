@@ -273,7 +273,7 @@ fn draw_preview_content(f: &mut Frame, app: &App, area: Rect, title: &str, previ
 
 fn draw_preview_help(f: &mut Frame, app: &App, area: Rect, title: &str) {
     let help = app.packs.get(app.selected_pack_index)
-        .map(|p| format!("Pack: {}\n\nKeys: p=preview v=view j/k=scroll a=add d=delete c=create ?=help q=quit\n\nTip: Select artifact and press 'p' to view content!", p.name))
+        .map(|p| format!("Pack: {}\n\nKeys: p=preview/view  j/k=scroll  a=add  d=delete  c=create  ?=help  q=quit\n\nTip: Press 'p' twice - first to preview, then to view content!", p.name))
         .unwrap_or_else(|| "No packs. Press 'c' to create.".into());
 
     f.render_widget(
@@ -487,9 +487,9 @@ fn draw_help_screen(f: &mut Frame) {
         (
             "Preview",
             vec![
-                "p  Preview/load content",
-                "v  Toggle stats/content",
-                "j/k  Scroll",
+                "p  Preview (first) / View content (second)",
+                "v  Toggle stats/content view",
+                "j/k  Scroll content",
                 "PageUp/Down  Page scroll",
             ],
         ),
