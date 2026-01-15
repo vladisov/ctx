@@ -1,6 +1,6 @@
 //! Suggest command - find related files
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::Result;
 use ctx_suggest::{SuggestConfig, SuggestRequest, SuggestionEngine};
@@ -9,8 +9,8 @@ pub async fn handle_suggest(file: PathBuf, max: usize, format: &str) -> Result<(
     // Canonicalize the file path
     let file = file.canonicalize()?;
 
-    // Find workspace root (look for .git or Cargo.toml)
-    let workspace = find_workspace_root(&file)?;
+    // Find workspace root
+    let workspace = super::find_workspace_root(&file)?;
 
     // Create suggestion engine
     let config = SuggestConfig {
@@ -68,33 +68,4 @@ pub async fn handle_suggest(file: PathBuf, max: usize, format: &str) -> Result<(
     }
 
     Ok(())
-}
-
-/// Find the workspace root by looking for .git or Cargo.toml
-fn find_workspace_root(file: &Path) -> Result<PathBuf> {
-    let mut current = if file.is_file() {
-        file.parent().unwrap_or(file).to_owned()
-    } else {
-        file.to_path_buf()
-    };
-
-    loop {
-        // Check for git repo
-        if current.join(".git").exists() {
-            return Ok(current);
-        }
-        // Check for Cargo.toml (Rust workspace)
-        if current.join("Cargo.toml").exists() {
-            return Ok(current);
-        }
-        // Check for package.json (Node.js project)
-        if current.join("package.json").exists() {
-            return Ok(current);
-        }
-
-        if !current.pop() {
-            // No parent, use original file's directory
-            return Ok(file.parent().unwrap_or(file).to_owned());
-        }
-    }
 }

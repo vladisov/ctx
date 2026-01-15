@@ -232,7 +232,7 @@ async fn add_related_files(
 ) -> Result<()> {
     // Find workspace root
     let file = std::path::Path::new(file_path);
-    let workspace = find_workspace_root(file)?;
+    let workspace = super::find_workspace_root(file)?;
 
     // Get suggestions
     let config = SuggestConfig {
@@ -314,28 +314,6 @@ async fn add_related_files(
     }
 
     Ok(())
-}
-
-/// Find workspace root by looking for .git, Cargo.toml, or package.json
-fn find_workspace_root(file: &Path) -> Result<std::path::PathBuf> {
-    let mut current = if file.is_file() {
-        file.parent().unwrap_or(file).to_owned()
-    } else {
-        file.to_path_buf()
-    };
-
-    loop {
-        if current.join(".git").exists()
-            || current.join("Cargo.toml").exists()
-            || current.join("package.json").exists()
-        {
-            return Ok(current);
-        }
-
-        if !current.pop() {
-            return Ok(file.parent().unwrap_or(file).to_owned());
-        }
-    }
 }
 
 async fn remove(storage: &Storage, pack_name: String, artifact_id: String) -> Result<()> {
@@ -630,7 +608,7 @@ async fn lint(storage: &Storage, denylist: &Denylist, pack_name: String, fix: bo
 
     // Find workspace root from first file
     let first_file = pack_files.iter().next().unwrap();
-    let workspace = find_workspace_root(std::path::Path::new(first_file))?;
+    let workspace = super::find_workspace_root(std::path::Path::new(first_file))?;
 
     // Analyze imports for all files in pack
     let mut missing_deps: std::collections::HashMap<String, Vec<String>> =
