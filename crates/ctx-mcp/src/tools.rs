@@ -50,7 +50,11 @@ pub async fn call_tool(
         }
         "ctx_packs_get" => {
             let pack = server.db.get_pack(required_str(args, "pack")?).await?;
-            serde_json::to_string_pretty(&pack)?
+            let artifacts = server.db.get_pack_artifacts(&pack.id).await?;
+            serde_json::to_string_pretty(&json!({
+                "pack": pack,
+                "artifacts": artifacts
+            }))?
         }
         "ctx_packs_preview" => {
             let pack_ids: Vec<String> = serde_json::from_value(args["packs"].clone())?;
