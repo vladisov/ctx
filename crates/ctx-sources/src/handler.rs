@@ -38,6 +38,7 @@ impl SourceHandlerRegistry {
         registry.register(Arc::new(crate::text::TextHandler));
         registry.register(Arc::new(crate::collection::CollectionHandler));
         registry.register(Arc::new(crate::git::GitHandler));
+        registry.register(Arc::new(crate::url::UrlHandler));
 
         registry
     }

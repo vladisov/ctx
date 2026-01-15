@@ -120,7 +120,8 @@ mod tests {
         let pack_data: serde_json::Value = serde_json::from_str(text).unwrap();
 
         assert!(pack_data.is_object());
-        assert_eq!(pack_data["name"], "my-pack");
+        assert_eq!(pack_data["pack"]["name"], "my-pack");
+        assert!(pack_data["artifacts"].is_array());
     }
 
     #[tokio::test]

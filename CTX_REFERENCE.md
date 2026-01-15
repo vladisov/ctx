@@ -40,7 +40,7 @@ ctx cp demo
 | Concept | Description |
 |---------|-------------|
 | **Pack** | Named bundle of sources with a token budget (default 128k) |
-| **Artifact** | Single source item (file, glob pattern, git diff, text) |
+| **Artifact** | Single source item (file, glob, git diff, text, URL) |
 | **Render** | Combines all artifacts into deterministic output |
 
 ## Source Types
@@ -71,6 +71,14 @@ ctx add demo git:diff                  # Working tree vs HEAD
 ctx add demo 'git:diff --base=main'    # Diff against main
 ctx add demo 'git:diff --base=HEAD~3'  # Last 3 commits
 ```
+
+### URLs (`url:`)
+```bash
+ctx add demo 'url:https://example.com/api-docs'  # Fetch webpage as text
+ctx add demo 'url:https://raw.githubusercontent.com/...'  # Raw file content
+```
+
+HTML pages are automatically converted to plain text with titles extracted.
 
 ### Markdown Directories (`md_dir:`)
 ```bash

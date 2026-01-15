@@ -273,6 +273,7 @@ async fn api_add_artifact(
         ArtifactType::GitDiff { base, head } => {
             format!("git://diff/{}..{}", base, head.as_deref().unwrap_or("HEAD"))
         }
+        ArtifactType::Url { url, .. } => format!("url:{}", url),
     };
 
     let artifact = Artifact::new(req.artifact_type.clone(), source_uri);
