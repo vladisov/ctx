@@ -1,4 +1,5 @@
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::Shell;
 
 #[derive(Parser)]
 #[command(name = "ctx")]
@@ -213,4 +214,19 @@ pub enum Commands {
         #[arg(long, default_value = "17380")]
         port: u16,
     },
+
+    /// Generate shell completions
+    Completions {
+        /// Shell to generate completions for
+        #[arg(value_enum)]
+        shell: Shell,
+    },
+}
+
+impl Cli {
+    /// Generate shell completions and write to stdout
+    pub fn print_completions(shell: Shell) {
+        let mut cmd = Self::command();
+        clap_complete::generate(shell, &mut cmd, "ctx", &mut std::io::stdout());
+    }
 }

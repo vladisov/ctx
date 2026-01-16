@@ -325,6 +325,27 @@ curl -X POST http://127.0.0.1:17373 \
 # Should return: {"jsonrpc":"2.0","id":1,"result":{}}
 ```
 
+## Shell Completions
+
+Generate and install shell completions for tab-completion support:
+
+```bash
+# Bash (add to ~/.bashrc)
+ctx completions bash >> ~/.bash_completion
+
+# Zsh (add to ~/.zshrc or create file in fpath)
+ctx completions zsh > ~/.zfunc/_ctx
+# Then add to ~/.zshrc: fpath=(~/.zfunc $fpath); autoload -Uz compinit; compinit
+
+# Fish
+ctx completions fish > ~/.config/fish/completions/ctx.fish
+
+# PowerShell (add to $PROFILE)
+ctx completions powershell >> $PROFILE
+```
+
+After installation, restart your shell or source the config file.
+
 ## File Locations
 
 - **Config:** `~/.ctx/config.toml`

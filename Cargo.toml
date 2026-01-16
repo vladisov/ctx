@@ -36,6 +36,7 @@ ctx-suggest = { path = "crates/ctx-suggest" }
 
 # CLI framework
 clap = { version = "4.5", features = ["derive", "cargo", "env"] }
+clap_complete = "4.5"
 
 # Async runtime
 tokio = { version = "1.42", features = ["full"] }

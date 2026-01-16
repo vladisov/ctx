@@ -117,5 +117,11 @@ async fn main() -> Result<()> {
                 commands::ui::handle(&storage).await
             }
         }
+
+        // Shell completions
+        cli::Commands::Completions { shell } => {
+            cli::Cli::print_completions(shell);
+            Ok(())
+        }
     }
 }
