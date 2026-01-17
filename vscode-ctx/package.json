@@ -2,7 +2,7 @@
   "name": "vscode-ctx",
   "displayName": "ctx - Context Packs for LLMs",
   "description": "Curate and manage context packs for LLMs. Load packs via MCP into Claude Code, Cursor, and more.",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "publisher": "vladisov",
   "license": "MIT",
   "icon": "media/icons/ctx-128.png",
@@ -21,8 +21,18 @@
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["Other", "Machine Learning"],
-  "keywords": ["llm", "context", "mcp", "claude", "ai", "chatgpt"],
+  "categories": [
+    "Other",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "llm",
+    "context",
+    "mcp",
+    "claude",
+    "ai",
+    "chatgpt"
+  ],
   "activationEvents": [
     "onStartupFinished",
     "workspaceContains:ctx.toml"
