@@ -1,9 +1,0 @@
-[package]
-name = "ctx-tokens"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-
-[dependencies]
-tiktoken-rs = "0.6"
-anyhow = { workspace = true }

@@ -83,7 +83,7 @@ impl RenderEngine {
         &self,
         artifacts: Vec<ProcessedArtifact>,
         budget_tokens: usize,
-        redaction_info: Vec<ctx_security::RedactionInfo>,
+        redaction_info: Vec<crate::security::RedactionInfo>,
         warnings: Vec<String>,
     ) -> Result<RenderResult> {
         // Apply budget - keep artifacts until we hit budget (caller pre-sorts by priority)
@@ -172,7 +172,7 @@ impl RenderEngine {
     /// Summarize redaction information by artifact
     fn summarize_redactions(
         &self,
-        redaction_info: Vec<ctx_security::RedactionInfo>,
+        redaction_info: Vec<crate::security::RedactionInfo>,
     ) -> Vec<RedactionSummary> {
         // Group by artifact_id
         let mut map: std::collections::HashMap<String, (Vec<String>, usize)> =

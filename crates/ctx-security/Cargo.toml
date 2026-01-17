@@ -1,9 +1,0 @@
-[package]
-name = "ctx-security"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-
-[dependencies]
-regex = { workspace = true }
-serde = { workspace = true }

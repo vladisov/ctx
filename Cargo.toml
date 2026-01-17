@@ -4,10 +4,7 @@ members = [
     "crates/ctx-core",
     "crates/ctx-storage",
     "crates/ctx-sources",
-    "crates/ctx-security",
-    "crates/ctx-tokens",
     "crates/ctx-engine",
-    "crates/ctx-config",
     "crates/ctx-tui",
     "crates/ctx-suggest",
 ]
@@ -26,11 +23,8 @@ license = "MIT OR Apache-2.0"
 ctx-core = { path = "crates/ctx-core" }
 ctx-storage = { path = "crates/ctx-storage" }
 ctx-sources = { path = "crates/ctx-sources" }
-ctx-security = { path = "crates/ctx-security" }
-ctx-tokens = { path = "crates/ctx-tokens" }
 ctx-engine = { path = "crates/ctx-engine" }
 ctx-mcp = { path = "crates/ctx-mcp" }
-ctx-config = { path = "crates/ctx-config" }
 ctx-tui = { path = "crates/ctx-tui" }
 ctx-suggest = { path = "crates/ctx-suggest" }
 

@@ -1,9 +1,10 @@
 mod cli;
 mod commands;
+mod config;
 
 use anyhow::Result;
 use clap::Parser;
-use ctx_config::Config;
+use config::Config;
 use ctx_sources::Denylist;
 use ctx_storage::Storage;
 

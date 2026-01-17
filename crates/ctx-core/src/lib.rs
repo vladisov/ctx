@@ -2,6 +2,8 @@ pub mod artifact;
 pub mod error;
 pub mod pack;
 pub mod render;
+pub mod security;
+pub mod tokens;
 
 pub use artifact::{Artifact, ArtifactMetadata, ArtifactType};
 pub use error::{Error, Result};
@@ -10,6 +12,8 @@ pub use render::{
     ArtifactSummary, ExclusionInfo, ProcessedArtifact, RedactionSummary, RenderEngine,
     RenderRequest, RenderResult,
 };
+pub use security::{RedactionInfo, Redactor};
+pub use tokens::TokenEstimator;
 
 #[cfg(test)]
 mod tests {

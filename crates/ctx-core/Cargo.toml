@@ -12,4 +12,5 @@ uuid = { workspace = true }
 blake3 = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
-ctx-security = { workspace = true }
+regex = { workspace = true }
+tiktoken-rs = "0.6"

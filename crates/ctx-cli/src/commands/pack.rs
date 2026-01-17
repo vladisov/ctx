@@ -1,5 +1,5 @@
+use crate::config::{ArtifactDefinition, Config, PackDefinition, ProjectConfig};
 use anyhow::Result;
-use ctx_config::{ArtifactDefinition, Config, PackDefinition, ProjectConfig};
 use ctx_core::{OrderingStrategy, Pack, RenderPolicy};
 use ctx_engine::Renderer;
 use ctx_sources::{Denylist, SourceHandlerRegistry, SourceOptions};

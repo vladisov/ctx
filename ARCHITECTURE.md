@@ -17,105 +17,239 @@ High-level overview of ctx's design and implementation.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                            ctx CLI                                   │
+│                            ctx-cli                                   │
 │  Commands: @, create, add, rm, ls, show, preview, cp, delete,       │
 │            suggest, lint, init, sync, save, mcp, ui, completions    │
+│  Config: Global (~/.ctx/config.toml) + Project (ctx.toml)           │
 └─────────────────────────────────────────────────────────────────────┘
                                   │
         ┌─────────────┬───────────┼───────────┬─────────────┐
         │             │           │           │             │
 ┌───────▼──────┐ ┌────▼────┐ ┌────▼────┐ ┌────▼────┐ ┌──────▼──────┐
-│   Storage    │ │ Engine  │ │   MCP   │ │   TUI   │ │   Suggest   │
-│  (SQLite +   │ │(Render  │ │ Server  │ │(Terminal│ │ (Smart      │
-│    Blobs)    │ │pipeline)│ │(JSON-RPC│ │   UI)   │ │  context)   │
-└───────┬──────┘ └────┬────┘ │+ REST)  │ └─────────┘ └─────────────┘
-        │             │      └─────────┘
-        │      ┌──────┴──────┬──────────┬──────────┐
-        │      │             │          │          │
-        │  ┌───▼────┐  ┌─────▼───┐ ┌────▼────┐ ┌───▼──────┐
-        │  │Sources │  │ Tokens  │ │Security │ │  Config  │
-        │  │(File,  │  │ (Token  │ │(Redact, │ │  (TOML)  │
-        │  │Git,URL)│  │  Est.)  │ │ Deny)   │ └──────────┘
-        │  └────────┘  └─────────┘ └─────────┘
-        │
-   ┌────▼─────┐
-   │   Core   │
-   │ (Domain) │
-   └──────────┘
+│  ctx-storage │ │ctx-engine│ │ ctx-mcp │ │ ctx-tui │ │ ctx-suggest │
+│  SQLite +    │ │ Render   │ │JSON-RPC │ │Terminal │ │   Smart     │
+│  Blob store  │ │ pipeline │ │+ REST   │ │   UI    │ │  context    │
+└───────┬──────┘ └────┬────┘ └─────────┘ └─────────┘ └─────────────┘
+        │             │
+        │      ┌──────┴──────┐
+        │      │             │
+        │  ┌───▼────┐   ┌────▼─────┐
+        │  │ctx-    │   │ ctx-core │
+        │  │sources │   │ Domain + │
+        │  │File,Git│   │ Tokens + │
+        │  │URL,Deny│   │ Security │
+        │  └────────┘   └──────────┘
+        │                    │
+        └────────────────────┘
 ```
 
 ---
 
-## Crates
+## Crates (7 total)
 
-### `ctx-cli` (Command Line Interface)
-- **Purpose**: User-facing commands and entry point
-- **Key files**: `main.rs`, `cli.rs`, `commands/*.rs`
-- **Commands**: `@`, `create`, `add`, `rm`, `ls`, `show`, `preview`, `cp`, `delete`, `suggest`, `lint`, `init`, `sync`, `save`, `mcp`, `ui`, `completions`
-- **Lines**: ~1,200
+### `ctx-core` — Domain Models & Utilities
+**Purpose**: Foundation layer with core types, token estimation, and security redaction.
 
-### `ctx-core` (Domain Models)
-- **Purpose**: Core data structures and render engine
-- **Key types**: `Pack`, `Artifact`, `RenderPolicy`, `ArtifactType`, `RenderEngine`
-- **Responsibilities**: Domain logic, serialization, budget enforcement
-- **Lines**: ~350
+**Core Types** (`artifact.rs`, `pack.rs`):
+- `Artifact` — Content unit with type, source URI, content hash, metadata
+- `ArtifactType` — Enum: File, FileRange, Text, Markdown, CollectionMdDir, CollectionGlob, GitDiff, Url
+- `Pack` — Named collection of artifacts with render policies
+- `RenderPolicy` — Budget tokens, ordering strategy
 
-### `ctx-storage` (Persistence Layer)
-- **Purpose**: SQLite database + blob storage
-- **Key files**: `db.rs`, `blob.rs`, `models.rs`
-- **Responsibilities**: CRUD operations, migrations, content-addressable storage
-- **Features**: Connection pooling, WAL mode, transactions
-- **Lines**: ~630
+**Render Engine** (`render.rs`):
+- `RenderEngine` — Deterministic payload generation
+- `ProcessedArtifact` — Artifact with loaded content and token count
+- `RenderResult` — Final output with payload, hash, included/excluded lists
 
-### `ctx-sources` (Source Handlers)
-- **Purpose**: Parse and load different artifact types
-- **Handlers**: `FileHandler`, `TextHandler`, `CollectionHandler`, `GitHandler`, `UrlHandler`
-- **Key files**: `handler.rs`, `file.rs`, `text.rs`, `collection.rs`, `git.rs`, `url.rs`, `denylist.rs`
-- **Responsibilities**: URI parsing, content loading, collection expansion, denylist validation
-- **Lines**: ~550
+**Token Estimation** (`tokens.rs`):
+- `TokenEstimator` — tiktoken-rs wrapper (cl100k_base encoding for GPT-4)
+- Methods: `estimate(text)`, `estimate_batch(texts)`
 
-### `ctx-security` (Redaction)
-- **Purpose**: Secret detection and redaction
-- **Patterns**: AWS keys, GitHub tokens, JWTs, API keys, private keys
-- **Method**: Regex-based pattern matching
-- **Lines**: ~120
+**Security** (`security.rs`):
+- `Redactor` — Regex-based secret detection and replacement
+- Patterns: AWS keys, GitHub tokens, JWTs, API keys, private keys, bearer tokens
+- Output: `[REDACTED:TYPE]` placeholders + `RedactionInfo` tracking
 
-### `ctx-tokens` (Token Estimation)
-- **Purpose**: Estimate token counts
-- **Method**: tiktoken-rs (cl100k_base encoding)
-- **Lines**: ~65
+**Lines**: ~390
 
-### `ctx-engine` (Render Orchestration)
-- **Purpose**: Coordinate rendering pipeline
-- **Pipeline**: Load → Expand → Redact → Estimate → Sort → Budget → Concatenate → Hash
-- **Key file**: `lib.rs` with `Renderer` struct
-- **Lines**: ~390
+---
 
-### `ctx-config` (Configuration)
-- **Purpose**: TOML configuration management
-- **Files**: `~/.ctx/config.toml`, `ctx.toml` (project-local)
-- **Features**: Auto-creation, defaults, validation, project namespacing
-- **Lines**: ~330
+### `ctx-cli` — Command Line Interface
+**Purpose**: User-facing entry point with all commands and configuration management.
 
-### `ctx-mcp` (MCP Server)
-- **Purpose**: JSON-RPC 2.0 server + REST API for AI agents
-- **Protocol**: Model Context Protocol (2025-03-26)
-- **Tools**: `ctx_packs_list`, `ctx_packs_get`, `ctx_packs_preview`, `ctx_packs_load`, `ctx_packs_create`, `ctx_packs_add_artifact`, `ctx_packs_delete`
-- **Transports**: HTTP (port 17373), stdio (for Claude Code)
-- **REST API**: `/api/packs`, `/api/suggest` (for VS Code, ChatGPT Actions)
-- **Lines**: ~700
+**Commands** (`commands/*.rs`):
+| Command | Description |
+|---------|-------------|
+| `@` (quick) | File + related files → clipboard |
+| `create` | Create new pack |
+| `add` | Add artifact to pack |
+| `rm` | Remove artifact |
+| `ls` | List all packs |
+| `show` | Show pack details |
+| `preview` | Preview rendered pack |
+| `cp` | Copy pack to clipboard |
+| `delete` | Delete pack |
+| `lint` | Check missing dependencies |
+| `suggest` | Get related file suggestions |
+| `init` | Create ctx.toml |
+| `sync` | Import packs from ctx.toml |
+| `save` | Export packs to ctx.toml |
+| `mcp` | Start MCP server |
+| `ui` | Launch TUI or web UI |
+| `completions` | Generate shell completions |
 
-### `ctx-tui` (Terminal UI)
-- **Purpose**: Interactive terminal interface
-- **Framework**: ratatui
-- **Features**: Pack browser, artifact preview, keyboard navigation
-- **Lines**: ~1,270
+**Configuration** (`config.rs`):
+- `Config` — Global settings (~/.ctx/config.toml): budget, denylist patterns, MCP settings
+- `ProjectConfig` — Project-local (ctx.toml): pack definitions, default budget
+- `PackDefinition` — Pack schema for ctx.toml with artifacts and priorities
 
-### `ctx-suggest` (Smart Context)
-- **Purpose**: Intelligent file suggestions
-- **Signals**: Git co-change history, import graph analysis
-- **Parsers**: Rust, TypeScript/JavaScript, Python
-- **Lines**: ~700
+**Lines**: ~1,580
+
+---
+
+### `ctx-storage` — Persistence Layer
+**Purpose**: SQLite database for metadata + content-addressable blob storage.
+
+**Database** (`db.rs`):
+- `Storage` — Main interface with connection pool (sqlx)
+- Tables: `packs`, `artifacts`, `pack_items` (many-to-many)
+- Features: WAL mode, migrations, transactions, upserts
+- Queries: Priority-ordered artifact retrieval, pack lookup by name/ID
+
+**Blob Storage** (`blob.rs`):
+- Content-addressable file system at `~/.local/share/com.ctx.ctx/blobs/`
+- Structure: `ab/abcdef123...` (2-char prefix directories)
+- BLAKE3 hashing for deduplication
+- Read/write with automatic directory creation
+
+**Lines**: ~710
+
+---
+
+### `ctx-sources` — Source Handlers
+**Purpose**: Parse URI schemes and load artifact content from various sources.
+
+**Handler Registry** (`handler.rs`):
+- `SourceHandlerRegistry` — Routes URIs to appropriate handlers
+- `SourceOptions` — Range, max_files, exclude patterns, priority
+
+**Handlers**:
+| Handler | URI Scheme | Functionality |
+|---------|------------|---------------|
+| `FileHandler` | `file:path` | Read files, support line ranges |
+| `TextHandler` | `text:content` | Inline text content |
+| `CollectionHandler` | `glob:`, `md_dir:` | Expand patterns to file lists |
+| `GitHandler` | `git:diff` | Run git commands, parse diff output |
+| `UrlHandler` | `url:https://` | Fetch web pages, convert HTML→text |
+
+**Denylist** (`denylist.rs`):
+- `Denylist` — Glob pattern matching for sensitive files
+- Default patterns: `.env*`, `.aws/**`, `secrets/**`, `*.key`, `*.pem`
+- Methods: `is_denied(path)`, `matching_pattern(path)`
+
+**Lines**: ~750
+
+---
+
+### `ctx-engine` — Render Orchestration
+**Purpose**: Coordinate the full rendering pipeline from pack to final payload.
+
+**Renderer** (`lib.rs`):
+- `Renderer` — Orchestrates: Storage → Sources → Redactor → TokenEstimator → RenderEngine
+- `render_pack(pack_id)` — Full pipeline for single pack
+- `render_request(pack_ids)` — Multi-pack rendering with merged output
+
+**Pipeline Steps**:
+1. Load pack and artifacts from storage
+2. Expand collections (glob patterns, md_dir)
+3. Load content via source handlers (disk or cached blob)
+4. Redact secrets with regex patterns
+5. Estimate token counts
+6. Sort by priority (deterministic)
+7. Apply budget (include until limit)
+8. Concatenate payload with headers
+9. Compute BLAKE3 hash for reproducibility
+
+**Lines**: ~390
+
+---
+
+### `ctx-mcp` — MCP Server
+**Purpose**: Model Context Protocol server for AI agent integration.
+
+**Protocol** (`protocol.rs`, `stdio.rs`):
+- JSON-RPC 2.0 over HTTP or stdio
+- MCP spec version: 2025-03-26
+- Capabilities: tools (list, call)
+
+**Tools** (`tools.rs`):
+| Tool | Parameters | Returns |
+|------|------------|---------|
+| `ctx_packs_list` | — | Pack names and IDs |
+| `ctx_packs_get` | name | Pack metadata + artifacts |
+| `ctx_packs_preview` | name | Token counts, included/excluded |
+| `ctx_packs_load` | name | **Full rendered content** |
+| `ctx_packs_create` | name, budget? | Created pack info |
+| `ctx_packs_add_artifact` | pack, source, priority? | Added artifact info |
+| `ctx_packs_delete` | name | Confirmation |
+
+**REST API** (`server.rs`):
+- `/api/packs` — CRUD for packs
+- `/api/packs/:name/render` — Get rendered content
+- `/api/packs/:name/artifacts` — Manage artifacts
+- `/api/suggest` — File suggestions
+
+**Lines**: ~800
+
+---
+
+### `ctx-tui` — Terminal UI
+**Purpose**: Interactive terminal interface for pack management.
+
+**Components**:
+- `App` (`app.rs`) — Application state, event handling
+- `UI` (`ui.rs`) — Ratatui rendering, layouts
+- `FileBrowser` (`file_browser.rs`) — Directory navigation for adding files
+
+**Features**:
+- Pack list with creation/deletion
+- Artifact browser with priority display
+- File browser for adding new artifacts
+- Preview pane with token counts
+- Keyboard navigation (vim-style)
+
+**Lines**: ~1,500
+
+---
+
+### `ctx-suggest` — Smart Context Selection
+**Purpose**: Intelligent file suggestions based on code relationships.
+
+**Suggestion Engine** (`lib.rs`):
+- `SuggestionEngine` — Combines signals, ranks results
+- `Suggestion` — Path, score (0-1), reasons
+- `SuggestConfig` — Weights, thresholds, limits
+
+**Signals** (`signals/`):
+| Signal | Weight | Method |
+|--------|--------|--------|
+| Git Co-Change | 0.5 | Analyze 500 commits, count co-occurrences |
+| Import Graph | 0.5 | Parse imports, build bidirectional graph |
+
+**Import Parsers** (`parsers/`):
+| Language | Patterns Detected |
+|----------|-------------------|
+| Rust | `use crate::`, `mod foo;`, `use super::` |
+| TypeScript/JS | `import from`, `require()`, `export from` |
+| Python | `import x`, `from x import y` |
+
+**Scoring**:
+- Direct import: 0.8
+- Imported by: 0.9
+- Transitive (1-hop): 0.3
+- Git co-change: count / max_count
+
+**Lines**: ~700
 
 ---
 
@@ -356,14 +490,14 @@ read_only = false
 ## Testing
 
 ### Test Coverage
-- **Unit tests**: 58 tests across all crates
+- **Unit tests**: 51 tests across all crates
 - **Integration tests**: 16 end-to-end CLI tests
-- **Run**: `cargo test --all && ./tests/integration_test.sh`
+- **Run**: `cargo test --workspace && ./tests/integration_test.sh`
 
 ### Test Commands
 ```bash
-cargo test --all           # Unit tests
-cargo clippy --all-targets # Lints
+cargo test --workspace     # Unit tests
+cargo clippy --workspace   # Lints
 cargo fmt --check          # Formatting
 ./tests/integration_test.sh # Integration
 ```
@@ -400,11 +534,12 @@ cargo fmt --check          # Formatting
 | Metric | Value |
 |--------|-------|
 | Lines of code | ~8,300 |
-| Crates | 10 |
+| Crates | 7 |
 | CLI commands | 17 |
 | Source handlers | 5 |
 | Artifact types | 8 |
 | MCP tools | 7 |
+| Unit tests | 51 |
 | Performance | <200ms typical |
 | Binary size | ~6MB (stripped) |
 | Startup time | ~20ms |

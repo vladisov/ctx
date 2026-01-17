@@ -1,5 +1,5 @@
+use crate::config::{ArtifactDefinition, PackDefinition, ProjectConfig};
 use anyhow::Result;
-use ctx_config::{ArtifactDefinition, PackDefinition, ProjectConfig};
 use ctx_storage::Storage;
 use std::path::Path;
 
