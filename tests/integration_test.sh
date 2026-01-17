@@ -2,6 +2,9 @@
 # Integration test for ctx
 set -euo pipefail
 
+# Store original directory for later tests
+ORIG_DIR="$(pwd)"
+
 # Simple binary detection
 CTX="${CTX:-./target/release/ctx}"
 if ! [ -f "$CTX" ]; then
@@ -189,7 +192,7 @@ cd - >/dev/null
 
 # Test 17: Quick command (ctx @)
 echo "Quick command (ctx @)"
-cd /Users/vladisov/dev/ctx
+cd "$ORIG_DIR"
 if $CTX @ src/main.rs --output 2>&1 | head -5 | grep -q "==="; then
     echo "✓ Quick command"
 else
