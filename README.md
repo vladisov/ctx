@@ -1,6 +1,7 @@
 # ctx
 
-**Curate what your LLM sees.** Create reusable context packs and load them into Claude Code, Cursor, or any MCP-compatible tool.
+**Curate what your LLM sees.** 
+Create reusable context packs and load them into Claude Code, Cursor, or any MCP-compatible tool.
 
 ```bash
 ctx create auth-refactor
