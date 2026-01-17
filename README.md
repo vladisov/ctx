@@ -13,6 +13,8 @@ claude mcp add ctx -- ctx mcp --stdio
 # "Load the auth-refactor pack"
 ```
 
+![ctx](media/cli.png)
+
 ## Why ctx?
 
 LLMs discover files, but they can't read your mind. ctx lets you:
@@ -65,6 +67,8 @@ ctx add pack 'text:Use async/await'              # Inline text
 ```
 
 ## VS Code Extension
+
+![vscode](media/vscode.png)
 
 [**Install from Marketplace**](https://marketplace.visualstudio.com/items?itemName=vladisov.vscode-ctx)
 
