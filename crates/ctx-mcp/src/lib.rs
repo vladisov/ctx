@@ -53,7 +53,7 @@ mod tests {
 
         // Should have at least the basic tools
         let tools = tools_json["tools"].as_array().unwrap();
-        assert!(tools.len() > 0);
+        assert!(!tools.is_empty());
 
         // Check for expected tool names
         let tool_names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();

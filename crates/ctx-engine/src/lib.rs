@@ -281,8 +281,10 @@ mod tests {
         let storage = create_test_storage().await;
 
         // Create a pack with small budget
-        let mut policy = RenderPolicy::default();
-        policy.budget_tokens = 10; // Very small budget
+        let policy = RenderPolicy {
+            budget_tokens: 10, // Very small budget
+            ..Default::default()
+        };
 
         let pack = Pack::new("budget-pack".to_string(), policy);
         storage.create_pack(&pack).await.unwrap();
@@ -310,7 +312,7 @@ mod tests {
         let result = renderer.render_pack(&pack.id, None).await.unwrap();
 
         // Should have excluded items due to budget
-        assert!(result.excluded.len() > 0 || result.token_estimate <= 10);
+        assert!(!result.excluded.is_empty() || result.token_estimate <= 10);
     }
 
     #[tokio::test]
@@ -341,7 +343,7 @@ mod tests {
         let renderer = Renderer::new(storage);
         let result = renderer.render_pack(&pack.id, None).await.unwrap();
 
-        assert!(result.redactions.len() > 0);
+        assert!(!result.redactions.is_empty());
         assert!(result.payload.is_some());
         let payload = result.payload.unwrap();
         assert!(payload.contains("[REDACTED:AWS_ACCESS_KEY]"));
