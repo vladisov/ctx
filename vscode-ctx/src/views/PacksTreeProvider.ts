@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { CtxApiClient } from "../api/client";
-import { Pack, PackItem, Artifact } from "../api/types";
+import { Pack, Artifact } from "../api/types";
 
 type TreeItem = PackTreeItem | ArtifactTreeItem;
 
