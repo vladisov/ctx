@@ -1,17 +1,28 @@
 {
   "name": "vscode-ctx",
-  "displayName": "ctx - Context Pack Manager",
-  "description": "Manage LLM context packs with ctx",
+  "displayName": "ctx - Context Packs for LLMs",
+  "description": "Curate and manage context packs for LLMs. Load packs via MCP into Claude Code, Cursor, and more.",
   "version": "0.1.0",
-  "publisher": "ctx",
+  "publisher": "vladisov",
+  "license": "MIT",
+  "icon": "media/icons/ctx-128.png",
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/vladisov/ctx"
   },
+  "bugs": {
+    "url": "https://github.com/vladisov/ctx/issues"
+  },
+  "homepage": "https://github.com/vladisov/ctx#readme",
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["Other"],
+  "categories": ["Other", "Machine Learning"],
+  "keywords": ["llm", "context", "mcp", "claude", "ai", "chatgpt"],
   "activationEvents": [
     "onStartupFinished",
     "workspaceContains:ctx.toml"
@@ -234,13 +245,16 @@
     "esbuild-base": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
     "compile": "npm run esbuild-base -- --sourcemap",
     "watch": "npm run esbuild-base -- --sourcemap --watch",
-    "lint": "eslint src --ext ts"
+    "lint": "eslint src --ext ts",
+    "package": "vsce package",
+    "publish": "vsce publish"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
+    "@vscode/vsce": "^3.0.0",
     "esbuild": "^0.19.0",
     "eslint": "^8.0.0",
     "typescript": "^5.3.0"
