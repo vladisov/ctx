@@ -35,13 +35,13 @@ LLMs can discover files, but they can't read your mind. ctx lets you:
 
 **Homebrew** (macOS/Linux):
 ```bash
-brew install ctx-dev/tap/ctx
+brew install vladisov/ctx/ctx
 ```
 
 **Pre-built binaries**:
 ```bash
 # Download from GitHub releases
-curl -fsSL https://github.com/ctx-dev/ctx/releases/latest/download/ctx-$(uname -m)-$(uname -s | tr '[:upper:]' '[:lower:]').tar.gz | tar xz
+curl -fsSL https://github.com/vladisov/ctx/releases/latest/download/ctx-$(uname -m)-$(uname -s | tr '[:upper:]' '[:lower:]').tar.gz | tar xz
 sudo mv ctx /usr/local/bin/
 ```
 
@@ -53,7 +53,7 @@ cargo install ctx-cli
 **VS Code Extension**:
 Search "ctx" in the VS Code marketplace, or:
 ```bash
-code --install-extension ctx-dev.vscode-ctx
+code --install-extension vladisov.vscode-ctx
 ```
 
 ---
@@ -136,7 +136,7 @@ Install from the marketplace or build locally:
 ```bash
 cd vscode-ctx
 npm install && npm run compile
-code --install-extension ctx-dev.vscode-ctx-0.1.0.vsix
+code --install-extension vladisov.vscode-ctx-0.1.0.vsix
 ```
 
 ---
@@ -242,7 +242,7 @@ artifacts = [
 ## Development
 
 ```bash
-git clone https://github.com/ctx-dev/ctx
+git clone https://github.com/vladisov/ctx
 cd ctx
 
 # Build
