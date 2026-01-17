@@ -71,6 +71,20 @@ pub async fn call_tool(
 
             serde_json::to_string_pretty(&result)?
         }
+        "ctx_packs_load" => {
+            let pack_name = required_str(args, "pack")?;
+            let pack = server.db.get_pack(pack_name).await?;
+
+            let result = server
+                .renderer
+                .render_request(RenderRequest {
+                    pack_ids: vec![pack.id],
+                })
+                .await?;
+
+            // Return the rendered content directly for LLM consumption
+            result.payload.unwrap_or_default()
+        }
         "ctx_packs_create" => {
             if server.read_only {
                 anyhow::bail!("Server is in read-only mode");
@@ -172,7 +186,7 @@ pub fn list_tools(read_only: bool) -> serde_json::Value {
         ),
         tool_schema(
             "ctx_packs_preview",
-            "Preview pack rendering with token counts",
+            "Preview pack rendering with token counts (use ctx_packs_load to get content)",
             json!({
                 "type": "object",
                 "properties": {
@@ -184,6 +198,17 @@ pub fn list_tools(read_only: bool) -> serde_json::Value {
                     "show_payload": {"type": "boolean", "default": false, "description": "Include rendered content"}
                 },
                 "required": ["packs"]
+            }),
+        ),
+        tool_schema(
+            "ctx_packs_load",
+            "Load pack content for LLM context. Returns the fully rendered pack content.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "pack": {"type": "string", "description": "Pack name or ID to load"}
+                },
+                "required": ["pack"]
             }),
         ),
     ];
