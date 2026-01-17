@@ -66,6 +66,8 @@ ctx add pack 'text:Use async/await'              # Inline text
 
 ## VS Code Extension
 
+[**Install from Marketplace**](https://marketplace.visualstudio.com/items?itemName=vladisov.vscode-ctx)
+
 Full-featured extension for managing context packs visually.
 
 **Features:**
