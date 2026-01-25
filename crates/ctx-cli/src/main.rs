@@ -124,5 +124,6 @@ async fn main() -> Result<()> {
             cli::Cli::print_completions(shell);
             Ok(())
         }
+        cli::Commands::Install { targets } => commands::install::handle(targets).await,
     }
 }

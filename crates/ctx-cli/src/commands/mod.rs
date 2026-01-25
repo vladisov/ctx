@@ -1,4 +1,5 @@
 pub mod init;
+pub mod install;
 pub mod mcp;
 pub mod pack;
 pub mod suggest;

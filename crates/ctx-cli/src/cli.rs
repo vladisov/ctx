@@ -1,4 +1,4 @@
-use clap::{CommandFactory, Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
 
 #[derive(Parser)]
@@ -183,6 +183,14 @@ pub enum Commands {
         all: bool,
     },
 
+    // ===== Integrations =====
+    /// Install ctx integration into other tools
+    Install {
+        /// Tools to install (claude, opencode, antigravity)
+        #[arg(required = true, value_delimiter = ',', num_args = 1..)]
+        targets: Vec<InstallTarget>,
+    },
+
     // ===== Services =====
     /// Start MCP server
     Mcp {
@@ -229,4 +237,11 @@ impl Cli {
         let mut cmd = Self::command();
         clap_complete::generate(shell, &mut cmd, "ctx", &mut std::io::stdout());
     }
+}
+
+#[derive(Clone, Debug, ValueEnum)]
+pub enum InstallTarget {
+    Claude,
+    Opencode,
+    Antigravity,
 }
