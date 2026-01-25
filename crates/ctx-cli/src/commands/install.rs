@@ -85,9 +85,17 @@ ctx sync
 
     for target in targets {
         match target {
-            InstallTarget::Claude => install_to_dir("Claude Code", "~/.claude/skills/ctx", skill_content)?,
-            InstallTarget::Opencode => install_to_dir("OpenCode", "~/.config/opencode/skills/ctx", skill_content)?,
-            InstallTarget::Antigravity => install_to_dir("Antigravity", "~/.gemini/antigravity/skills/ctx", skill_content)?,
+            InstallTarget::Claude => {
+                install_to_dir("Claude Code", "~/.claude/skills/ctx", skill_content)?
+            }
+            InstallTarget::Opencode => {
+                install_to_dir("OpenCode", "~/.config/opencode/skills/ctx", skill_content)?
+            }
+            InstallTarget::Antigravity => install_to_dir(
+                "Antigravity",
+                "~/.gemini/antigravity/skills/ctx",
+                skill_content,
+            )?,
         }
     }
     Ok(())
@@ -95,19 +103,20 @@ ctx sync
 
 fn install_to_dir(name: &str, path_str: &str, content: &str) -> Result<()> {
     println!("📦 Installing for {}...", name);
-    
+
     // Expand ~ manually since std::process does not do it
     let path_str = if path_str.starts_with("~/") {
-        let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
+        let home =
+            dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
         let mut p = home.to_string_lossy().to_string();
         p.push_str(&path_str[1..]);
         p
     } else {
         path_str.to_string()
     };
-    
+
     let path = PathBuf::from(path_str);
-    
+
     if !path.exists() {
         fs::create_dir_all(&path)?;
     }
@@ -118,4 +127,3 @@ fn install_to_dir(name: &str, path_str: &str, content: &str) -> Result<()> {
     println!("   ✅ Created skill at: {:?}", target_file);
     Ok(())
 }
-

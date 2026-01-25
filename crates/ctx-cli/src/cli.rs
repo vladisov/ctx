@@ -183,7 +183,6 @@ pub enum Commands {
         all: bool,
     },
 
-
     // ===== Integrations =====
     /// Install ctx integration into other tools
     Install {
