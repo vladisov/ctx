@@ -1,7 +1,7 @@
 use crate::cli::InstallTarget;
 use anyhow::Result;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub async fn handle(targets: Vec<InstallTarget>) -> Result<()> {
     // Shared SKILL.md template
