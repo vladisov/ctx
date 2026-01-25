@@ -11,6 +11,8 @@ ctx add auth-refactor 'git:diff --base=main'
 
 # Load into Claude Code via MCP
 claude mcp add ctx -- ctx mcp --stdio
+# OR using the install command
+ctx install claude
 # "Load the auth-refactor pack"
 ```
 
@@ -145,6 +147,7 @@ Use for ChatGPT Actions, scripts, or CI/CD.
 | `ctx suggest` | Related file suggestions |
 | `ctx lint` | Find missing deps |
 | `ctx init` | Create ctx.toml |
+| `ctx install` | Install integrations (claude, opencode) |
 | `ctx sync` | Import from ctx.toml |
 | `ctx save` | Export to ctx.toml |
 | `ctx mcp` | Start MCP server |

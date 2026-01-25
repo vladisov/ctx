@@ -14,6 +14,15 @@ cargo install --path crates/ctx-cli
 ctx --version
 ```
 
+### Tool Integration
+
+`ctx` can automatically configure itself for various AI tools:
+
+```bash
+# Install for Claude Code, OpenCode, and Antigravity
+ctx install claude opencode antigravity
+```
+
 ### Quick Example
 
 ```bash
